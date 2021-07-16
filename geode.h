@@ -39,13 +39,6 @@
 
 /*--- Enums and structs ---*/
 
-enum Material{
-    MAT_STONE,      //Requires pickaxe to break effectively
-    MAT_WOOD,       //Requires axe to break effectively
-    MAT_EARTH,      //Requires shovel to break effectively
-    MAT_SOLID       //Cannot harvest
-};
-
 enum MovementState{
     MOVE_STATIONARY,
     MOVE_ACTIVE,
@@ -124,7 +117,7 @@ typedef struct Image{
 typedef struct Block{
     uint atlas_index;   //Index of texture
     uchar options;      //Tile bitflags
-    Material material;  //Tile material type
+    uint material;  //Tile material type
     uint drop_id;       //ID of resource to drop
     uint drop_count;    //drop count
 }Block;

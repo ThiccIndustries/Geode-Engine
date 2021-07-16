@@ -185,7 +185,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
             else if(anim_tick >= anim_rate_d * 1)
                 index += (atlas_texture -> width / atlas_texture -> tile_size) * 2;
     }
-    
+
     uint texture_coord_x = index % (atlas_texture -> width / atlas_texture -> tile_size);
     uint texture_coord_y = index / (atlas_texture -> width / atlas_texture -> tile_size);
 
