@@ -179,14 +179,13 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
             int anim_tick = g_time -> tick % entity -> animation_rate;
             int anim_rate_d = entity -> animation_rate / 4;
             if(anim_tick >= anim_rate_d * 3)
-                index += 8;
+                index += atlas_texture -> width / atlas_texture -> tile_size;
             else if(anim_tick >= anim_rate_d * 2)
                 index += 0;
             else if(anim_tick >= anim_rate_d * 1)
-                index += 16;
+                index += (atlas_texture -> width / atlas_texture -> tile_size) * 2;
     }
-
-    //std::cout << inv_x << std::endl;
+    
     uint texture_coord_x = index % (atlas_texture -> width / atlas_texture -> tile_size);
     uint texture_coord_y = index / (atlas_texture -> width / atlas_texture -> tile_size);
 

@@ -10,7 +10,7 @@
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 #include "iostream"
-
+#include <cmath>
 /*--- Settings, bitflags, and selectors ---*/
 
 #define RENDER_SCALE 4
@@ -44,11 +44,6 @@ enum Material{
     MAT_WOOD,       //Requires axe to break effectively
     MAT_EARTH,      //Requires shovel to break effectively
     MAT_SOLID       //Cannot harvest
-};
-
-enum EntityType{
-    ENT_GENERIC,
-    ENT_PLAYER
 };
 
 enum MovementState{
@@ -156,7 +151,7 @@ typedef struct Entity{
     uint move_state;        //Is entity moving
     uint direction;         //Direction entity facing
     uint animation_rate;    //Rate at which to animate movement speed
-    EntityType type;        //Type enum of Entity. Def. ENT_GENERIC
+    uint type;              //Type enum of Entity. Def. ENT_GENERIC
 }Entity;
 
 //World chunk
@@ -219,11 +214,11 @@ void world_set_chunk_callbacks(
         Chunk* (*load_callback)(Coord2i coord),
         void   (*unload_callback)(Chunk* chunk)
 );
-void    world_populate_chunk_buffer(const std::string& savename, Entity* viewport_e);                   //Populate Chunk Buffer
-Chunk*  world_get_chunk(Coord2i ccoord);                                                                //Find a chunk in g_chunk_buffer
-void    world_modify_chunk(const std::string& savename, Coord2i ccoord, Coord2i tcoord, uint value);    //Set tile of chunk to value
-Chunk*  world_chunkfile_read(const std::string& savename, Coord2i ccoord);                              //read chunk from file
-void    world_chunkfile_write(const std::string& savename, Chunk* chunk);                               //write chunk to chunkfile
+void    world_populate_chunk_buffer(Entity* viewport_e);                //Populate Chunk Buffer
+Chunk*  world_get_chunk(Coord2i ccoord);                                //Find a chunk in g_chunk_buffer
+void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set tile of chunk to value
+Chunk*  world_chunkfile_read(const std::string& path, Coord2i ccoord);  //read chunk from file
+void    world_chunkfile_write(const std::string& path, Chunk* chunk);   //write chunk to chunkfile
 
 //minicraft_rendering.cpp
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us);                 //Init OpenGL, GLFW, and create window
@@ -302,6 +297,17 @@ inline int clampi(int a, int min, int max){
     if(a > max) return max;
     if(a < min) return min;
     return a;
+}
+
+/*Jesus shut up clion*/
+inline uint clampui(uint a, uint min, uint max){
+    if(a > max) return max;
+    if(a < min) return min;
+    return a;
+}
+
+inline double distancec2d(Coord2d a, Coord2d b){
+    return sqrt( std::pow((b.x - a.x), 2) +  std::pow((b.y - a.y), 2));
 }
 
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){

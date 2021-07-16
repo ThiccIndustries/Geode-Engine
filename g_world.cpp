@@ -19,7 +19,7 @@ void world_set_chunk_callbacks(
     chunk_unload_callback   = unload_callback;
 }
 
-void world_populate_chunk_buffer(const std::string& savename, Entity* viewport_e){
+void world_populate_chunk_buffer(Entity* viewport_e){
     int player_chunk_x = (int)(viewport_e -> position.x + (viewport_e -> camera.position.x)) / 256;
     int player_chunk_y = (int)(viewport_e -> position.y + (viewport_e -> camera.position.x)) / 256;
 
@@ -46,7 +46,7 @@ void world_populate_chunk_buffer(const std::string& savename, Entity* viewport_e
     }
 }
 
-void world_modify_chunk(const std::string& savename, Coord2i ccoord, Coord2i tcoord, uint value){
+void world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value){
     //Look for chunk in chunk buffer
     Chunk* chunkptr = world_get_chunk(ccoord);
 
@@ -56,8 +56,6 @@ void world_modify_chunk(const std::string& savename, Coord2i ccoord, Coord2i tco
     }
 
     chunkptr -> foreground_tiles[tcoord.x + (tcoord.y * 16)] = value;
-
-    world_chunkfile_write(savename, chunkptr);
 }
 
 
@@ -70,8 +68,8 @@ Chunk* world_get_chunk(Coord2i ccoord){
     return nullptr;
 }
 
-Chunk* world_chunkfile_read(const std::string& savename, Coord2i coord){
-    FILE* chunkfile = fopen(get_resource_path(g_game_path, "saves/" + savename + "/chunks/c" + std::to_string(coord.x) + "x" + std::to_string(coord.y) + ".cf").c_str(), "rb");
+Chunk* world_chunkfile_read(const std::string& path, Coord2i coord){
+    FILE* chunkfile = fopen(get_resource_path(g_game_path, path + "/c" + std::to_string(coord.x) + "x" + std::to_string(coord.y) + ".cf").c_str(), "rb");
 
     //Chunk is new (no chunkfile)
     if(!chunkfile){
@@ -93,12 +91,12 @@ Chunk* world_chunkfile_read(const std::string& savename, Coord2i coord){
     return chunkptr;
 }
 
-void world_chunkfile_write(const std::string& savename, Chunk* chunk){
+void world_chunkfile_write(const std::string& path, Chunk* chunk){
     int cx = chunk -> pos.x;
     int cy = chunk -> pos.y;
 
-    std::filesystem::create_directories(get_resource_path(g_game_path, "saves/" + savename + "/chunks"));
-    FILE* chunkfile = fopen(get_resource_path(g_game_path, "saves/" + savename + "/chunks/c" + std::to_string(cx) + "x" + std::to_string(cy) + ".cf").c_str(), "wb");
+    std::filesystem::create_directories(get_resource_path(g_game_path, path));
+    FILE* chunkfile = fopen(get_resource_path(g_game_path, path + "/c" + std::to_string(cx) + "x" + std::to_string(cy) + ".cf").c_str(), "wb");
 
     fwrite(&cx, sizeof(int), 1, chunkfile);
     fwrite(&cy, sizeof(int), 1, chunkfile);
