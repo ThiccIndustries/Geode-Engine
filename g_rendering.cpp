@@ -12,6 +12,7 @@ Font* g_def_font;
 //Some stuff I dont wanna deal with outside g_rendering.cpp.
 void rendering_draw_healthbar(uint health, Texture* ui_texture, uint atlas_index);
 void rendering_draw_cursor(Texture* ui_texture, uint atlas_index);
+void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c);
 
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us){
     //Init GLFW
@@ -64,6 +65,9 @@ void rendering_draw_chunk(Chunk* chunk, Texture* atlas_texture, Entity* viewport
 
     double chunk_x = chunk -> pos.x * (16 * 16) - (viewport_x - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale) ));
     double chunk_y = chunk -> pos.y * (16 * 16) - (viewport_y - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale) ));
+
+    if(g_debug)
+        rendering_debug_draw_box({chunk_x, chunk_y}, {chunk_x + (16 * 16), chunk_y + (16 * 16)}, COLOR_GREEN);
 
     for(int y = 0; y < 16; y++){
         for(int x = 0; x < 16; x++){
@@ -123,6 +127,26 @@ void rendering_draw_chunk(Chunk* chunk, Texture* atlas_texture, Entity* viewport
     }
 }
 
+void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c){
+    glColor1c(c);
+    glLineWidth(2);
+    glBegin(GL_LINES);{
+        glVertex2d(p1.x * g_video_mode.world_scale, p1.y * g_video_mode.world_scale);
+        glVertex2d(p2.x * g_video_mode.world_scale, p1.y * g_video_mode.world_scale);
+
+        glVertex2d(p1.x * g_video_mode.world_scale, p2.y * g_video_mode.world_scale);
+        glVertex2d(p2.x * g_video_mode.world_scale, p2.y * g_video_mode.world_scale);
+
+        glVertex2d(p1.x * g_video_mode.world_scale, p1.y * g_video_mode.world_scale);
+        glVertex2d(p1.x * g_video_mode.world_scale, p2.y * g_video_mode.world_scale);
+
+        glVertex2d(p2.x * g_video_mode.world_scale, p1.y * g_video_mode.world_scale);
+        glVertex2d(p2.x * g_video_mode.world_scale, p2.y * g_video_mode.world_scale);
+    }
+    glEnd();
+    glColor1c(COLOR_WHITE);
+}
+
 void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e){
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS);
 
@@ -155,35 +179,34 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     uint index = entity -> atlas_index;
     bool inv_x = false;
 
-    switch(entity -> direction){
-        case DIRECTION_NORTH:
-            index += 1;
-            inv_x = false;
-            break;
-        case DIRECTION_EAST:
-            index += 2;
-            inv_x = true;
-            break;
-        case DIRECTION_SOUTH:
-            index += 0;
-            inv_x = false;
-            break;
-        case DIRECTION_WEST:
-            index += 2;
-            inv_x = false;
-            break;
+
+    if(entity -> spritesheet_size.x == 3) {
+        switch (entity->direction) {
+            case DIRECTION_NORTH:
+                index += 1;
+                inv_x = false;
+                break;
+            case DIRECTION_EAST:
+                index += 2;
+                inv_x = true;
+                break;
+            case DIRECTION_SOUTH:
+                index += 0;
+                inv_x = false;
+                break;
+            case DIRECTION_WEST:
+                index += 2;
+                inv_x = false;
+                break;
+        }
     }
 
     switch(entity -> move_state){
-        case MOVE_ACTIVE:
+        case ENT_STATE_MOVING:
             int anim_tick = g_time -> tick % entity -> animation_rate;
-            int anim_rate_d = entity -> animation_rate / 4;
-            if(anim_tick >= anim_rate_d * 3)
-                index += atlas_texture -> width / atlas_texture -> tile_size;
-            else if(anim_tick >= anim_rate_d * 2)
-                index += 0;
-            else if(anim_tick >= anim_rate_d * 1)
-                index += (atlas_texture -> width / atlas_texture -> tile_size) * 2;
+            int anim_rate_d = entity -> animation_rate / entity -> frame_count;
+            index += entity -> frame_order[(anim_tick / anim_rate_d)] * (atlas_texture -> width / atlas_texture -> tile_size);
+            break;
     }
 
     uint texture_coord_x = index % (atlas_texture -> width / atlas_texture -> tile_size);
@@ -209,36 +232,34 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     glDisable(GL_BLEND);
 
     if(g_debug){
-        Coord2d entity_bounds_p1{
-            entity_x + entity -> bounds.p1.x,
-            entity_y + entity -> bounds.p1.y
+        Coord2d entity_cbounds_p1{
+            entity_x + entity -> col_bounds.p1.x,
+            entity_y + entity -> col_bounds.p1.y
         };
-        Coord2d entity_bounds_p2{
-                entity_x + entity -> bounds.p2.x,
-                entity_y + entity -> bounds.p2.y
+        Coord2d entity_cbounds_p2{
+                entity_x + entity -> col_bounds.p2.x,
+                entity_y + entity -> col_bounds.p2.y
         };
 
-        glColor1c(COLOR_RED);
-        glBegin(GL_LINES);{
-            glVertex2d(entity_bounds_p1.x * g_video_mode.world_scale, entity_bounds_p1.y * g_video_mode.world_scale);
-            glVertex2d(entity_bounds_p2.x * g_video_mode.world_scale, entity_bounds_p1.y * g_video_mode.world_scale);
+        Coord2d entity_hbounds_p1{
+                entity_x + entity -> hit_bounds.p1.x,
+                entity_y + entity -> hit_bounds.p1.y
+        };
+        Coord2d entity_hbounds_p2{
+                entity_x + entity -> hit_bounds.p2.x,
+                entity_y + entity -> hit_bounds.p2.y
+        };
 
-            glVertex2d(entity_bounds_p1.x * g_video_mode.world_scale, entity_bounds_p2.y * g_video_mode.world_scale);
-            glVertex2d(entity_bounds_p2.x * g_video_mode.world_scale, entity_bounds_p2.y * g_video_mode.world_scale);
-
-            glVertex2d(entity_bounds_p1.x * g_video_mode.world_scale, entity_bounds_p1.y * g_video_mode.world_scale);
-            glVertex2d(entity_bounds_p1.x * g_video_mode.world_scale, entity_bounds_p2.y * g_video_mode.world_scale);
-
-            glVertex2d(entity_bounds_p2.x * g_video_mode.world_scale, entity_bounds_p1.y * g_video_mode.world_scale);
-            glVertex2d(entity_bounds_p2.x * g_video_mode.world_scale, entity_bounds_p2.y * g_video_mode.world_scale);
-        }
-        glEnd();
-        glColor1c(COLOR_WHITE);
+        rendering_debug_draw_box(entity_cbounds_p1, entity_cbounds_p2, COLOR_RED);
+        rendering_debug_draw_box(entity_hbounds_p1, entity_hbounds_p2, COLOR_BLUE);
     }
 }
 
 void rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e){
     for(int i = g_entity_highest_id; i >= 0; i--){
+        if(g_entity_registry[i] == nullptr)
+            continue;
+
         rendering_draw_entity(g_entity_registry[i], atlas_texture, viewport_e);
     }
 }

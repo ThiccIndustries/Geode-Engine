@@ -42,6 +42,7 @@ void world_populate_chunk_buffer(Entity* viewport_e){
             if(chunk_unload_callback == nullptr)
                 error("Chunk load funcptr not set.", "Chunk Load function pointer not set.");
             g_chunk_buffer[chunki] = chunk_load_callback(Coord2i{chunk_x, chunk_y});
+            //rendering_update_chunk_texture(g_chunk_buffer[chunki]);
         }
     }
 }

@@ -4,7 +4,6 @@
  * This software is under the: Thicc-Industries-Do-What-You-Want-I-Dont-Care License.
  */
 
-#include <cmath>
 #include "geode.h"
 
 Entity* g_entity_registry[ENTITY_MAX];
@@ -42,6 +41,7 @@ void entity_delete(uint id){
 
     delete g_entity_registry[id];
     g_entity_registry[id] = nullptr;
+
 }
 
 //TODO: test each movement axis separately
@@ -62,10 +62,11 @@ void entity_move(Entity* entity, Coord2d delta, bool respect_collisions){
     if(respect_collisions)
         new_delta = entity_collision(entity, delta);
 
-    Coord2d new_ent_pos = entity -> position + new_delta;
+    Coord2d new_ent_pos = {entity -> position.x + new_delta.x,
+                           entity -> position.y + new_delta.y};
 
     entity -> position = new_ent_pos;
-    entity -> move_state = MOVE_ACTIVE;
+    entity -> move_state = ENT_STATE_MOVING;
 
     if(delta.x > 0)
         entity -> direction = DIRECTION_EAST;
@@ -79,13 +80,22 @@ void entity_move(Entity* entity, Coord2d delta, bool respect_collisions){
 
 void entity_tick(){
     for(int i = 0; i <= g_entity_highest_id; ++i){
-        g_entity_registry[i] -> move_state = MOVE_STATIONARY;
-        entity_move(g_entity_registry[i], g_entity_registry[i]->velocity, true);
+        Entity* e = g_entity_registry[i];
+
+        if(g_entity_registry[i] == nullptr)
+            continue;
 
         if(entity_tick_callback == nullptr)
             error("Ent fncptr not set.", "Entity tick function pointer not set.");
 
+        //Dont move dead people, they dont do that.
+        if(g_entity_registry[i] -> move_state != ENT_STATE_DYING) {
+            g_entity_registry[i]->move_state = ENT_STATE_STATIONARY;
+            entity_move(g_entity_registry[i], g_entity_registry[i]->velocity, true);
+        }
+
         entity_tick_callback(g_entity_registry[i]);
+
     }
 }
 
@@ -100,8 +110,8 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
     Coord2d new_ent_pos = entity -> position + delta;
 
     //Global coordinates of bounding box, with new desired position
-    BoundingBox global_bb = { {entity->bounds.p1.x + new_ent_pos.x, entity->bounds.p1.y + new_ent_pos.y},
-                              {entity->bounds.p2.x + new_ent_pos.x, entity->bounds.p2.y + new_ent_pos.y} };
+    BoundingBox global_bb = { {entity->col_bounds.p1.x + new_ent_pos.x, entity->col_bounds.p1.y + new_ent_pos.y},
+                              {entity->col_bounds.p2.x + new_ent_pos.x, entity->col_bounds.p2.y + new_ent_pos.y} };
 
     Coord2i chunk;
     Coord2i tile{ (int)(entity->position.x / 16),
@@ -161,12 +171,16 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
         Entity* checking_ent = g_entity_registry[i];
+
+        if(checking_ent == nullptr)
+            continue;
+
         if(checking_ent == entity)
             continue;
 
         BoundingBox ent_g_bb = {
-                {checking_ent->bounds.p1.x + checking_ent->position.x, checking_ent->bounds.p1.y + checking_ent->position.y},
-                {checking_ent->bounds.p2.x + checking_ent->position.x, checking_ent->bounds.p2.y + checking_ent->position.y},
+                {checking_ent->col_bounds.p1.x + checking_ent->position.x, checking_ent->col_bounds.p1.y + checking_ent->position.y},
+                {checking_ent->col_bounds.p2.x + checking_ent->position.x, checking_ent->col_bounds.p2.y + checking_ent->position.y},
         };
 
         if(entity_AABB(ent_g_bb, global_bb)){
@@ -193,7 +207,39 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
 
     return delta;
 }
+Entity* entity_hit(Entity* entity, Coord2d delta){
 
+    //std::cout << delta.x << " " << delta.y << std::endl;
+
+    Coord2d new_ent_pos = entity -> position + delta;
+
+    //Global coordinates of bounding box, with new desired position
+    BoundingBox global_bb = { {entity->hit_bounds.p1.x + new_ent_pos.x, entity->hit_bounds.p1.y + new_ent_pos.y},
+                              {entity->hit_bounds.p2.x + new_ent_pos.x, entity->hit_bounds.p2.y + new_ent_pos.y} };
+
+    //Check all entities
+    //TODO: better way?
+
+    for(int i = 0; i <= g_entity_highest_id; ++i){
+        Entity* checking_ent = g_entity_registry[i];
+
+        if(checking_ent == nullptr)
+            continue;
+
+        if(checking_ent == entity)
+            continue;
+
+        BoundingBox ent_g_bb = {
+                {checking_ent->hit_bounds.p1.x + checking_ent->position.x, checking_ent->hit_bounds.p1.y + checking_ent->position.y},
+                {checking_ent->hit_bounds.p2.x + checking_ent->position.x, checking_ent->hit_bounds.p2.y + checking_ent->position.y},
+        };
+
+        if(entity_AABB(ent_g_bb, global_bb))
+            return g_entity_registry[i];
+    }
+
+    return nullptr;
+}
 bool entity_AABB(BoundingBox a, BoundingBox b){
     return (a.p1.x <= b.p2.x && a.p2.x >= b.p1.x) && (a.p1.y <= b.p2.y && a.p2.y >= b.p1.y);
 }

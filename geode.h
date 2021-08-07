@@ -7,10 +7,12 @@
 #ifndef GEODE_GEODE_H
 #define GEODE_GEODE_H
 
+#include <string>
+#include <iostream>
+#include <cmath>
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
-#include "iostream"
-#include <cmath>
+
 /*--- Settings, bitflags, and selectors ---*/
 
 #define RENDER_SCALE 4
@@ -39,9 +41,10 @@
 
 /*--- Enums and structs ---*/
 
-enum MovementState{
-    MOVE_STATIONARY,
-    MOVE_ACTIVE,
+enum EntityState{
+    ENT_STATE_STATIONARY,
+    ENT_STATE_MOVING,
+    ENT_STATE_DYING
 };
 
 enum MovementDirection{
@@ -58,18 +61,28 @@ typedef unsigned char uchar;    //Shorthand unsigned char type
 typedef struct Coord2d{
     double x, y;
 
-    Coord2d operator+(const Coord2d& b) const{
-        return Coord2d{this->x + b.x, this->y + b.y};
+    bool operator==(const Coord2d& c) const{
+        return this->x == c.x && this->y == c.y;
     }
 
-    bool operator==(const Coord2d& b) const{
-        return this->x == b.x && this->y == b.y;
+    Coord2d operator+(const Coord2d& c) const{
+        return {this -> x + c.x, this -> y + c.y};
     }
+
+
 }Coord2d;
 
 //2D integer coordinate
 typedef struct Coord2i{
     int x, y;
+
+    bool operator==(const Coord2i& c) const{
+        return this->x == c.x && this->y == c.y;
+    }
+
+    Coord2i operator+(const Coord2i& c) const{
+        return {this -> x + c.x, this -> y + c.y};
+    }
 }Coord2i;
 
 //Color struct
@@ -135,24 +148,29 @@ typedef struct BoundingBox{
 
 //All Entity types must contain an Entity member 'e' as their first member
 typedef struct Entity{
-    uint id;                //id of the entity in g_entity_registry
-    Coord2d position;       //position of the Entity
-    Coord2d velocity;
-    uint atlas_index;       //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
-    BoundingBox bounds;     //Bounding Box for entity
-    Camera camera{{8,8}};   //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
-    uint move_state;        //Is entity moving
-    uint direction;         //Direction entity facing
-    uint animation_rate;    //Rate at which to animate movement speed
-    uint type;              //Type enum of Entity. Def. ENT_GENERIC
-}Entity;
+    uint        id;                 //id of the entity in g_entity_registry
+    Coord2d     position;           //position of the Entity
+    Coord2d     velocity;
+    uint        atlas_index;        //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
+    Coord2i     spritesheet_size{};   //Size of the sprite sheet { directions, frames }
+    uint        frame_count;
+    uint*       frame_order;
+    BoundingBox col_bounds{};         //Bounding Box for entity
+    BoundingBox hit_bounds{};         //Hitbox for entity
+    Camera      camera{8,8};        //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
+    uint        move_state;         //Is entity moving
+    uint        direction;          //Direction entity facing
+    uint        animation_rate;     //Rate at which to animate movement speed
+    uint        type;               //Type enum of Entity. Def. ENT_GENERIC
+} Entity;
 
 //World chunk
 typedef struct Chunk{
-    Coord2i pos{0,0};               //Chunk coordinates
-    uchar overlay_tiles[256]{};     //Base tiles
-    uchar foreground_tiles[256]{};  //Overlay tiles
-}Chunk;
+    Coord2i pos{};                    //Chunk coordinates
+    uchar overlay_tiles[256]{};       //Base tiles
+    uchar foreground_tiles[256]{};    //Overlay tiles
+    Texture* ren_texture;
+} Chunk;
 
 typedef struct Time{
     long   tick;        //The number of game ticks
@@ -199,7 +217,7 @@ extern Font* g_def_font;
 
 //minicraft_texture.cpp
 Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);           //Generate Texture Object
-Texture*    texture_load_bmp(const std::string&, uchar texture_load_options, uint tile_size);   //Load a 24-bit BMP
+Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);   //Load a 24-bit BMP
 void        texture_bind(Texture* t, GLuint sampler);                                           //Bind texture to GL_TEXTURE_2D
 
 //minicraft_world.cpp
@@ -223,6 +241,7 @@ void        rendering_draw_text(const std::string& text, uint size, Font* font, 
 void        rendering_draw_hud(uint health, Texture* ui_texture_sheet);                                     //Draw hud
 void        rendering_draw_dialog(const std::string& title, const std::string& message, Font* font);        //Draw a dialog
 Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                               //Get world position of viewport position
+void        rendering_update_chunk_texture(Chunk* c);                                                       //Update chunk texture
 
 //minicraft_input.cpp
 void input_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);   //Keyboard callback
@@ -252,12 +271,13 @@ void    entity_move(Entity* entity, Coord2d delta, bool respect_collisions);    
 void    entity_delete(uint id);                                                 //Removes entity to entity_registry and deletes Entity
 void    entity_tick();                                                          //Ticks all entities
 Coord2d entity_collision(Entity* entity, Coord2d delta);                        //Check entity collision
+Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
 void    entity_set_entity_tick_callback(void (*callback)(Entity*));
 /*---inline util functions---*/
 
 inline void glColor1c(const Color& c){
-    glColor3ub(c.r, c.b, c.g);
+    glColor3ub(c.r, c.g, c.b);
 }
 
 inline void error(const std::string& error_message, const std::string& console) {
