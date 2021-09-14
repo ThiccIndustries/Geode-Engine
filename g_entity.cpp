@@ -9,8 +9,6 @@
 Entity* g_entity_registry[ENTITY_MAX];
 uint g_entity_highest_id = 0;
 
-void (* entity_tick_callback)(Entity* e);
-
 Entity* entity_create(Entity* entity){
     for(int i = 0; i < ENTITY_MAX; ++i){
         if(g_entity_registry[i] == nullptr){
@@ -85,22 +83,12 @@ void entity_tick(){
         if(g_entity_registry[i] == nullptr)
             continue;
 
-        if(entity_tick_callback == nullptr)
-            error("Ent fncptr not set.", "Entity tick function pointer not set.");
+        entity_move(g_entity_registry[i], g_entity_registry[i]->velocity, true);
 
-        //Dont move dead people, they dont do that.
-        if(g_entity_registry[i] -> move_state != ENT_STATE_DYING) {
-            g_entity_registry[i]->move_state = ENT_STATE_STATIONARY;
-            entity_move(g_entity_registry[i], g_entity_registry[i]->velocity, true);
-        }
-
-        entity_tick_callback(g_entity_registry[i]);
+        //Tick entity
+        g_entity_registry[i] -> tick_func(g_entity_registry[i]);
 
     }
-}
-
-void entity_set_entity_tick_callback(void (*callback_function)(Entity*)){
-    entity_tick_callback = callback_function;
 }
 
 Coord2d entity_collision(Entity* entity, Coord2d delta){

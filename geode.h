@@ -43,8 +43,7 @@
 
 enum EntityState{
     ENT_STATE_STATIONARY,
-    ENT_STATE_MOVING,
-    ENT_STATE_DYING
+    ENT_STATE_MOVING
 };
 
 enum MovementDirection{
@@ -148,20 +147,21 @@ typedef struct BoundingBox{
 
 //All Entity types must contain an Entity member 'e' as their first member
 typedef struct Entity{
-    uint        id;                 //id of the entity in g_entity_registry
-    Coord2d     position;           //position of the Entity
-    Coord2d     velocity;
-    uint        atlas_index;        //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
-    Coord2i     spritesheet_size{};   //Size of the sprite sheet { directions, frames }
-    uint        frame_count;
-    uint*       frame_order;
-    BoundingBox col_bounds{};         //Bounding Box for entity
-    BoundingBox hit_bounds{};         //Hitbox for entity
-    Camera      camera{8,8};        //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
-    uint        move_state;         //Is entity moving
-    uint        direction;          //Direction entity facing
-    uint        animation_rate;     //Rate at which to animate movement speed
-    uint        type;               //Type enum of Entity. Def. ENT_GENERIC
+    uint        id;                     //id of the entity in g_entity_registry
+    Coord2d     position;               //position of the Entity, this is updated every tick based on its velocity and collisions
+    Coord2d     velocity;               //velocity of the Entity
+    uint        atlas_index;            //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
+    Coord2i     spritesheet_size;       //Size of the sprite sheet { directions, frames }
+    uint        frame_count;            //Number of animation frames
+    uint*       frame_order;            //Order of frames in array
+    BoundingBox col_bounds{};           //Bounding Box for entity
+    BoundingBox hit_bounds{};           //Hitbox for entity
+    Camera      camera{8,8};            //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
+    uint        move_state;             //Is entity moving
+    uint        direction;              //Direction entity facing
+    uint        animation_rate;         //Rate at which to animate movement speed
+    uint        type;                   //Type enum of Entity. Def. ENT_GENERIC
+    void        (*tick_func)(Entity* e); //Function executed on tick
 } Entity;
 
 //World chunk
@@ -169,7 +169,6 @@ typedef struct Chunk{
     Coord2i pos{};                    //Chunk coordinates
     uchar overlay_tiles[256]{};       //Base tiles
     uchar foreground_tiles[256]{};    //Overlay tiles
-    Texture* ren_texture;
 } Chunk;
 
 typedef struct Time{
@@ -216,15 +215,16 @@ extern Font* g_def_font;
 /*--- Functions ---*/
 
 //minicraft_texture.cpp
-Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);           //Generate Texture Object
-Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);   //Load a 24-bit BMP
-void        texture_bind(Texture* t, GLuint sampler);                                           //Bind texture to GL_TEXTURE_2D
+Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);               //Generate Texture Object
+Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);  //Load a 24-bit BMP
+void        texture_bind(Texture* t, GLuint sampler);                                               //Bind texture to GL_TEXTURE_2D
 
 //minicraft_world.cpp
 void world_set_chunk_callbacks(
         Chunk* (*load_callback)(Coord2i coord),
         void   (*unload_callback)(Chunk* chunk)
-);
+);  //Set callbacks for world loading
+
 void    world_populate_chunk_buffer(Entity* viewport_e);                //Populate Chunk Buffer
 Chunk*  world_get_chunk(Coord2i ccoord);                                //Find a chunk in g_chunk_buffer
 void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set tile of chunk to value
@@ -273,13 +273,15 @@ void    entity_tick();                                                          
 Coord2d entity_collision(Entity* entity, Coord2d delta);                        //Check entity collision
 Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
-void    entity_set_entity_tick_callback(void (*callback)(Entity*));
+
 /*---inline util functions---*/
 
+//Fake GL function to use Color instead of 3ub
 inline void glColor1c(const Color& c){
     glColor3ub(c.r, c.g, c.b);
 }
 
+//Exit the game with an error message
 inline void error(const std::string& error_message, const std::string& console) {
     if (g_debug){
         std::cout << console << std::endl;
@@ -287,17 +289,7 @@ inline void error(const std::string& error_message, const std::string& console) 
     Timer* t = time_timer_start(TIME_TPS * 10);
 
     while(!time_timer_finished(t)){
-        //Calc engine error id
-        char c;
-        uint ci;
-        uint errid;
-        for(int i = 0; i < error_message.length(); i++){
-            c = error_message.at(i);
-            ci = g_def_font -> font_atlas.find(c);
-            errid += ci;
-        }
-
-        rendering_draw_dialog("GEODE ERROR " +  std::to_string(errid) + ":", error_message, g_def_font);
+        rendering_draw_dialog("GEODE ERROR", error_message, g_def_font);
         glfwSwapBuffers(g_video_mode.windowptr);
         glfwPollEvents();
         time_update_time(glfwGetTime());
@@ -306,23 +298,26 @@ inline void error(const std::string& error_message, const std::string& console) 
     glfwSetWindowShouldClose(g_video_mode.windowptr, 1);
 }
 
+//Clamp int between min and max
 inline int clampi(int a, int min, int max){
     if(a > max) return max;
     if(a < min) return min;
     return a;
 }
 
-/*Jesus shut up clion*/
+//Clamp uint between min and max
 inline uint clampui(uint a, uint min, uint max){
     if(a > max) return max;
     if(a < min) return min;
     return a;
 }
 
+//Simple distance calculation
 inline double distancec2d(Coord2d a, Coord2d b){
     return sqrt( std::pow((b.x - a.x), 2) +  std::pow((b.y - a.y), 2));
 }
 
+//What does this even do?
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
     uint substri = executable_path.find_last_of('/');
     return executable_path.substr(0, substri) + "/" + resource_name;
