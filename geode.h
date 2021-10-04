@@ -9,6 +9,7 @@
 
 #include <string>
 #include <iostream>
+#include <map>
 #include <cmath>
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
@@ -230,6 +231,7 @@ Chunk*  world_get_chunk(Coord2i ccoord);                                //Find a
 void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set tile of chunk to value
 Chunk*  world_chunkfile_read(const std::string& path, Coord2i ccoord);  //read chunk from file
 void    world_chunkfile_write(const std::string& path, Chunk* chunk);   //write chunk to chunkfile
+std::map<Coord2i, Coord2i> world_get_local_coordinates(Coord2i gcoord); //Get chunk and tile from global tile coordinate
 
 //minicraft_rendering.cpp
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us);                 //Init OpenGL, GLFW, and create window

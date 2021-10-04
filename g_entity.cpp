@@ -80,13 +80,14 @@ void entity_tick(){
     for(int i = 0; i <= g_entity_highest_id; ++i){
         Entity* e = g_entity_registry[i];
 
-        if(g_entity_registry[i] == nullptr)
+        if(e == nullptr)
             continue;
-
-        entity_move(g_entity_registry[i], g_entity_registry[i]->velocity, true);
+        
+        e -> move_state = ENT_STATE_STATIONARY;
+        entity_move(e, e->velocity, true);
 
         //Tick entity
-        g_entity_registry[i] -> tick_func(g_entity_registry[i]);
+        e -> tick_func(e);
 
     }
 }
