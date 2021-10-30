@@ -9,9 +9,6 @@
 Video_Mode g_video_mode;
 Font* g_def_font;
 
-//Some stuff I dont wanna deal with outside g_rendering.cpp.
-void rendering_draw_healthbar(uint health, Texture* ui_texture, uint atlas_index);
-void rendering_draw_cursor(Texture* ui_texture, uint atlas_index);
 void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c);
 
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us){
@@ -20,17 +17,35 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
         return nullptr;
     }
 
+    //Auto calc window res and scale
+    uint width = window_x;
+    uint height;
+
+    GLFWmonitor* mon = glfwGetPrimaryMonitor();
+    const GLFWvidmode* mode = glfwGetVideoMode(mon);
+
+    double aspect = (double)mode->width / (double)mode -> height;
+
+    height  = width * (1.0f/ aspect);
+    std::cout << width << " " << height << std::endl;
+
+    int scale1 = mode->width / width;
+    int scale2 = mode->height / height;
+
+    int scale = std::max(scale1, scale2);
+
+    scale -= 1;
     //Create window and set context
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    GLFWwindow* windowptr = glfwCreateWindow(window_x * ws, window_y * ws, "Minicraft", nullptr, nullptr);
+    GLFWwindow* windowptr = glfwCreateWindow(width * scale, height * scale, "Minicraft", nullptr, nullptr);
     glfwMakeContextCurrent(windowptr);
     glewInit();
 
     //Set up ortho projection
     glLoadIdentity();
-    glOrtho(0, window_x, window_y, 0, 1, -1);
+    glOrtho(0, width, height, 0, 1, -1);
     glMatrixMode(GL_PROJECTION);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -39,23 +54,24 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     glfwSwapInterval(0);
 
     g_video_mode = {
-            {(int)window_x, (int)window_y}, //resolution
-            (int)ws,    //Window scale
-            (int)rs,    //World scale
-            (int)us,    //Ui scale
+            {(int)width, (int)height}, //resolution
+            (uint)scale,    //Window scale
+            rs,    //World scale
+            us,    //Ui scale
             windowptr
     };
 
     return windowptr;
 }
 
-void rendering_draw_chunk(Chunk* chunk, Texture* atlas_texture, Entity* viewport_e){
+void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS);
 
     double viewport_x = viewport_e -> position.x + (viewport_e -> camera.position.x);
     double viewport_y = viewport_e -> position.y + (viewport_e -> camera.position.y);
 
     Coord2d delta_x = {viewport_e -> velocity.x * tick_interp, 0};
+
     if(entity_collision(viewport_e, delta_x) == delta_x)
         viewport_x += viewport_e->velocity.x * tick_interp;
 
@@ -63,46 +79,39 @@ void rendering_draw_chunk(Chunk* chunk, Texture* atlas_texture, Entity* viewport
     if(entity_collision(viewport_e, delta_y) == delta_y)
         viewport_y += viewport_e->velocity.y * tick_interp;
 
+    if(chunk == nullptr)
+        return;
+
     double chunk_x = chunk -> pos.x * (16 * 16) - (viewport_x - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale) ));
     double chunk_y = chunk -> pos.y * (16 * 16) - (viewport_y - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale) ));
 
-    if(g_debug)
+    //Don't render loaded chunks if they're out of render distance
+    if(chunk_x > g_video_mode.window_resolution.x || (chunk_x + 256) < 0)
+        return;
+    if(chunk_y > g_video_mode.window_resolution.y || (chunk_y + 256) < 0)
+        return;
+
+    if(chunk -> render_texture == nullptr)
+        world_chunk_refresh_metatextures(chunk);
+
+    texture_bind(chunk -> render_texture, 0);
+
+    glEnable(GL_TEXTURE_2D);
+    glBegin(GL_QUADS);{
+        glTexCoord2d(0, 0); glVertex2d((chunk_x * g_video_mode.world_scale)                                   , (chunk_y * g_video_mode.world_scale));
+        glTexCoord2d(1, 0); glVertex2d((chunk_x * g_video_mode.world_scale) + (256 * g_video_mode.world_scale), (chunk_y * g_video_mode.world_scale));
+        glTexCoord2d(1, 1); glVertex2d((chunk_x * g_video_mode.world_scale) + (256 * g_video_mode.world_scale), (chunk_y * g_video_mode.world_scale) + (256 * g_video_mode.world_scale));
+        glTexCoord2d(0, 1); glVertex2d((chunk_x * g_video_mode.world_scale)                                   , (chunk_y * g_video_mode.world_scale) + (256 * g_video_mode.world_scale));
+    }
+    glEnd();
+    glDisable(GL_TEXTURE_2D);
+
+    if(g_debug) {
         rendering_debug_draw_box({chunk_x, chunk_y}, {chunk_x + (16 * 16), chunk_y + (16 * 16)}, COLOR_GREEN);
-
-    for(int y = 0; y < 16; y++){
-        for(int x = 0; x < 16; x++){
-            if(chunk_x + (x * 16) > g_video_mode.window_resolution.x || chunk_x + (x * 16) < -16)
-                continue;
-            if(chunk_y + (y * 16) > g_video_mode.window_resolution.y || chunk_y + (y * 16) < -16)
-                continue;
-
-            uint texture_coord_x = g_block_registry[chunk -> foreground_tiles[(y * 16) + x]] -> atlas_index % (atlas_texture -> width / atlas_texture -> tile_size);
-            uint texture_coord_y = g_block_registry[chunk -> foreground_tiles[(y * 16) + x]] -> atlas_index / (atlas_texture -> width / atlas_texture -> tile_size);
-
-            double texture_uv_x = atlas_texture -> atlas_uvs.x * texture_coord_x;
-            double texture_uv_y = atlas_texture -> atlas_uvs.y * texture_coord_y;
-
-            bool inv_x = g_block_registry[chunk -> foreground_tiles[(y * 16) + x]]->options & TILE_TEX_FLIP_X;
-            bool inv_y = g_block_registry[chunk -> foreground_tiles[(y * 16) + x]]->options & TILE_TEX_FLIP_Y;
-
-            int tile_scl = (16 * g_video_mode.world_scale);
-
-            if(inv_y)
-                std::cout << (uint)chunk -> foreground_tiles[(y * 16) + x] << std::endl;
-
-            texture_bind(atlas_texture, 0);
-            glEnable(GL_TEXTURE_2D);
-            glBegin(GL_QUADS);{
-                glTexCoord2d(texture_uv_x + atlas_texture -> atlas_uvs.x * inv_x,    texture_uv_y + atlas_texture -> atlas_uvs.y * inv_y);  glVertex2d((chunk_x * g_video_mode.world_scale) + (x * tile_scl),             (chunk_y * g_video_mode.world_scale) + (y * tile_scl));
-                glTexCoord2d(texture_uv_x + atlas_texture -> atlas_uvs.x * !inv_x,   texture_uv_y + atlas_texture -> atlas_uvs.y * inv_y);  glVertex2d((chunk_x * g_video_mode.world_scale) + (x * tile_scl) + tile_scl,  (chunk_y * g_video_mode.world_scale) + (y * tile_scl));
-                glTexCoord2d(texture_uv_x + atlas_texture -> atlas_uvs.x * !inv_x,   texture_uv_y + atlas_texture -> atlas_uvs.y * !inv_y); glVertex2d((chunk_x * g_video_mode.world_scale) + (x * tile_scl) + tile_scl,  (chunk_y * g_video_mode.world_scale) + (y * tile_scl) + tile_scl);
-                glTexCoord2d(texture_uv_x + atlas_texture -> atlas_uvs.x * inv_x,    texture_uv_y + atlas_texture -> atlas_uvs.y * !inv_y); glVertex2d((chunk_x * g_video_mode.world_scale) + (x * tile_scl),             (chunk_y * g_video_mode.world_scale) + (y * tile_scl) + tile_scl);
-            }
-            glEnd();
-            glDisable(GL_TEXTURE_2D);
-
-            if(g_debug){
-                if(g_block_registry[chunk -> foreground_tiles[(y * 16) + x]] -> options & TILE_SOLID) {
+        uint tile_scl = 16 * g_video_mode.world_scale;
+        for(uint x = 0; x < 16; ++x) {
+            for(uint y = 0; y < 16; ++y) {
+                if (g_block_registry[chunk->background_tiles[(y * 16) + x]]->options & TILE_SOLID || g_block_registry[chunk->overlay_tiles[(y * 16) + x]]->options & TILE_SOLID ) {
                     glColor1c(COLOR_RED);
                     glLineWidth(2);
                     glBegin(GL_LINES);
@@ -179,7 +188,6 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     uint index = entity -> atlas_index;
     bool inv_x = false;
 
-
     if(entity -> spritesheet_size.x == 3) {
         switch (entity->direction) {
             case DIRECTION_NORTH:
@@ -201,6 +209,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
         }
     }
 
+
     switch(entity -> move_state){
         case ENT_STATE_MOVING:
             int anim_tick = g_time -> tick % entity -> animation_rate;
@@ -219,7 +228,6 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     texture_bind(atlas_texture, 0);
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
-
 
     glBegin(GL_QUADS);{
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y);                                 glVertex2d((entity_x * scl),                 (entity_y * scl));
@@ -264,18 +272,18 @@ void rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e){
     }
 }
 
-void rendering_draw_chunk_buffer(Texture* atlas_texture, Entity* viewport_e){
-    for(int i = 0; i < RENDER_DISTANCE * RENDER_DISTANCE * 4; ++i){
-        rendering_draw_chunk(g_chunk_buffer[i], atlas_texture, viewport_e);
+void rendering_draw_chunk_buffer(Entity* viewport_e){
+    for(int i = 0; i < 9; ++i){
+        rendering_draw_chunk(g_chunk_buffer[i], viewport_e);
     }
 }
 
-void rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2i pos){
+void rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2d pos){
     char c;         //Char being drawn
     uint ci;        //The index of the char in font -> font_atlas
     uint    ci_x,   ci_y;  //The 2D position of the char in font -> t
     double  uv_x,   uv_y;
-    int     pos_x,  pos_y;
+    double  pos_x,  pos_y;
     int     tilesize = font -> t -> tile_size * size;
     pos_y = pos.y;
 
@@ -298,10 +306,10 @@ void rendering_draw_text(const std::string& text, uint size, Font* font, Color c
         pos_x = pos.x + (i * tilesize);
 
         glBegin(GL_QUADS);{
-            glTexCoord2d(uv_x                           , uv_y                              ); glVertex2i(pos_x           , pos_y);
-            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y                              ); glVertex2i(pos_x + tilesize, pos_y);
-            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y + font -> t -> atlas_uvs.y   ); glVertex2i(pos_x + tilesize, pos_y + tilesize);
-            glTexCoord2d(uv_x                           , uv_y + font -> t -> atlas_uvs.y   ); glVertex2i(pos_x           , pos_y + tilesize);
+            glTexCoord2d(uv_x                           , uv_y                              ); glVertex2d(pos_x           , pos_y);
+            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y                              ); glVertex2d(pos_x + tilesize, pos_y);
+            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y + font -> t -> atlas_uvs.y   ); glVertex2d(pos_x + tilesize, pos_y + tilesize);
+            glTexCoord2d(uv_x                           , uv_y + font -> t -> atlas_uvs.y   ); glVertex2d(pos_x           , pos_y + tilesize);
         }
         glEnd();
     }
@@ -316,8 +324,8 @@ void rendering_draw_cursor(Texture* ui_texture, uint atlas_index){
     double uv_x, uv_y;
 
     double scl = g_video_mode.ui_scale;
-    x = input_mouse_position().x / (g_video_mode.window_scale * g_video_mode.ui_scale);
-    y = input_mouse_position().y / (g_video_mode.window_scale * g_video_mode.ui_scale);
+    x = input_mouse_position().x / (g_video_mode.window_scale * scl);
+    y = input_mouse_position().y / (g_video_mode.window_scale * scl);
 
     uv_x = (atlas_index % (ui_texture -> width / ui_texture -> tile_size))  * ui_texture -> atlas_uvs.x;
     uv_y = (atlas_index / (ui_texture -> height / ui_texture -> tile_size)) * ui_texture -> atlas_uvs.y;
@@ -338,24 +346,25 @@ void rendering_draw_cursor(Texture* ui_texture, uint atlas_index){
     glDisable(GL_BLEND);
 }
 
-void rendering_draw_healthbar(uint health, Texture* ui_texture, uint health_atlas1, uint health_atlas2){
+void rendering_draw_bar(uint value, Coord2i pos, Texture* ui_texture, uint health_atlas){
     double uv_x, uv_y;
     double scl = g_video_mode.ui_scale;
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
     texture_bind(ui_texture, 0);
 
-    uint atlas_index = health_atlas1;
+    uint atlas_index;
     for(uint i = 0; i < 10; ++i){
-        atlas_index = health >= (i + 1) ? health_atlas1 : health_atlas2;
+        atlas_index = value >= (i + 1) ? health_atlas : health_atlas + 1;
+
         uv_x = (atlas_index % (ui_texture -> width / ui_texture -> tile_size)) * ui_texture -> atlas_uvs.x;
         uv_y = (atlas_index / (ui_texture -> height / ui_texture -> tile_size)) * ui_texture -> atlas_uvs.y;
 
         glBegin(GL_QUADS);{
-            glTexCoord2d(uv_x                            , uv_y                             ); glVertex2d((2 * scl) + (i * ui_texture -> tile_size * scl)                                   , (2 * scl));
-            glTexCoord2d(uv_x + ui_texture -> atlas_uvs.x, uv_y                             ); glVertex2d((2 * scl) + (i * ui_texture -> tile_size * scl) + (ui_texture -> tile_size * scl) , (2 * scl));
-            glTexCoord2d(uv_x + ui_texture -> atlas_uvs.x, uv_y + ui_texture -> atlas_uvs.y ); glVertex2d((2 * scl) + (i * ui_texture -> tile_size * scl) + (ui_texture -> tile_size * scl) , (2 * scl) + (ui_texture -> tile_size * scl));
-            glTexCoord2d(uv_x                            , uv_y + ui_texture -> atlas_uvs.y ); glVertex2d((2 * scl) + (i * ui_texture -> tile_size * scl)                                   , (2 * scl) + (ui_texture -> tile_size * scl));
+            glTexCoord2d(uv_x                            , uv_y                             ); glVertex2d((pos.x * scl) + (2 * scl) + (i * ui_texture -> tile_size * scl)                                   , (pos.y * scl) + (2 * scl));
+            glTexCoord2d(uv_x + ui_texture -> atlas_uvs.x, uv_y                             ); glVertex2d((pos.x * scl) + (2 * scl) + (i * ui_texture -> tile_size * scl) + (ui_texture -> tile_size * scl) , (pos.y * scl) + (2 * scl));
+            glTexCoord2d(uv_x + ui_texture -> atlas_uvs.x, uv_y + ui_texture -> atlas_uvs.y ); glVertex2d((pos.x * scl) + (2 * scl) + (i * ui_texture -> tile_size * scl) + (ui_texture -> tile_size * scl) , (pos.y * scl) + (2 * scl) + (ui_texture -> tile_size * scl));
+            glTexCoord2d(uv_x                            , uv_y + ui_texture -> atlas_uvs.y ); glVertex2d((pos.x * scl) + (2 * scl) + (i * ui_texture -> tile_size * scl)                                   , (pos.y * scl) + (2 * scl) + (ui_texture -> tile_size * scl));
         }
         glEnd();
     }
@@ -387,14 +396,8 @@ void rendering_draw_dialog(const std::string& title, const std::string& message,
     glEnd();
     glColor1c({255, 255, 255});
 
-    rendering_draw_text(title, 1, font, {255, 255, 255}, {(int)title_offset, (RENDER_WINY / 2) - (int)(font -> t -> tile_size / 2) - (2* (int)font -> t -> tile_size)});
-    rendering_draw_text(message, 1, font, {255, 255, 255}, {(int)offset, (RENDER_WINY / 2) - (int)(font -> t -> tile_size / 2)});
-}
-
-void rendering_draw_hud(uint health, Texture* ui_texture_sheet){
-    //Draw cursor
-    rendering_draw_healthbar(health, ui_texture_sheet, 1, 2);
-    rendering_draw_cursor(ui_texture_sheet, 0);
+    rendering_draw_text(title, 1, font, {255, 255, 255}, {(double)title_offset, (double)(RENDER_WINY / 2) - (int)(font -> t -> tile_size / 2) - (2* (int)font -> t -> tile_size)});
+    rendering_draw_text(message, 1, font, {255, 255, 255}, {(double)offset, (double)(RENDER_WINY / 2) - (int)(font -> t -> tile_size / 2)});
 }
 
 

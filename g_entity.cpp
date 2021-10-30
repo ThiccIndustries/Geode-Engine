@@ -124,7 +124,8 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
                 continue;
 
             //Tile is not solid, no need to check AABBa
-            if(!(g_block_registry[ chunkptr->foreground_tiles[ rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID))
+            if(!((g_block_registry[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)
+             || (g_block_registry[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)))
                 continue;
 
             //TODO: is this even right?
@@ -229,6 +230,42 @@ Entity* entity_hit(Entity* entity, Coord2d delta){
 
     return nullptr;
 }
+
+struct shake_event{
+  Entity* e;
+  Camera cam_origin;
+  int count;
+};
+
+/*void camera_shake(Entity* entity, Camera cam_origin, int count){
+
+    if(count == 0) {
+        entity->camera = cam_origin;
+        return;
+    }
+
+    shake_event* s = new shake_event{entity, cam_origin, count};
+
+    time_callback_start(1, [](void *ptr){
+        double dx = (((double)rand() / RAND_MAX) * 4) - 2;
+        double dy = (((double)rand() / RAND_MAX) * 4) - 2;
+        std::cout << dx << " " << dy << std::endl;
+        shake_event* shake = (shake_event*)ptr;
+
+        shake-> e -> camera.position = shake -> e -> camera.position + Coord2d{dx, dy};
+        camera_shake(shake -> e, shake -> cam_origin, shake -> count - 1);
+    }, s);
+}*/
+
+void entity_damage(Entity* entity, uint damage){
+    if(damage >= entity -> health)
+        entity_delete(entity -> id);
+
+    entity -> health -= damage;
+    //camera_shake(entity, entity -> camera, 10);
+}
+
+
 bool entity_AABB(BoundingBox a, BoundingBox b){
     return (a.p1.x <= b.p2.x && a.p2.x >= b.p1.x) && (a.p1.y <= b.p2.y && a.p2.y >= b.p1.y);
 }

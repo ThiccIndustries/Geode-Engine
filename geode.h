@@ -17,28 +17,26 @@
 /*--- Settings, bitflags, and selectors ---*/
 
 #define RENDER_SCALE 4
-#define RENDER_DISTANCE 3
-#define RENDER_WINX 480
-#define RENDER_WINY 270
+#define RENDER_DISTANCE 1
+#define RENDER_WINX 240
+#define RENDER_WINY 160
 
 #define WORLD_PERLIN_SCALE 0.05
 #define WORLD_WATER_SCALE 0.25
 
 #define TEXTURE_MULTIPLE 0x01
 #define TEXTURE_SINGLE   0x02
+#define TEXTURE_STORE    0x04   //Save the texture data outside of OpenGL Texture Buffer
 
-#define TILE_BREAKABLE   0x01   //Tile is destructible
-#define TILE_TRANSPARENT 0x02   //Tile has transparency
-#define TILE_SOLID       0x04   //Tile has collisions
-#define TILE_TEX_FLIP_X  0x08   //Tile should be rendered with texture flipped across X axis
-#define TILE_TEX_FLIP_Y  0x10   //Tile should be rendered with texture flipped across Y axis
+#define TILE_SOLID       0x01   //Tile has collisions
+#define TILE_TEX_FLIP_X  0x02   //Tile should be rendered with texture flipped across X axis
+#define TILE_TEX_FLIP_Y  0x04   //Tile should be rendered with texture flipped across Y axis
 
 #define ENTITY_MAX 0xFFFF
 
-#define PLAYER_INVENTORY_SIZE       256
-#define PLAYER_INVENTORY_STACK_SIZE 64
+#define STORAGE_SIZE 96
 
-#define TIME_TPS   64
+#define TIME_TPS 64
 
 /*--- Enums and structs ---*/
 
@@ -93,9 +91,9 @@ typedef struct Color{
 //Video mode of the game window
 typedef struct Video_Mode{
     Coord2i window_resolution;
-    int window_scale;
-    int world_scale;
-    int ui_scale;
+    uint window_scale;
+    uint world_scale;
+    uint ui_scale;
     GLFWwindow* windowptr;
 }Video_Mode;
 
@@ -107,11 +105,12 @@ typedef struct Camera{
 
 //OpenGL texture id with dimensions and texture uv information
 typedef struct Texture{
-    GLuint id;          //OpenGL texture id
-    uint width;         //Size of texture in pixels
-    uint height;        //------------------------
-    uint tile_size;     //Size of tiles
-    Coord2d atlas_uvs;  //Difference in UV coordinates per texture
+    GLuint id;                  //OpenGL texture id
+    uint width;                 //Size of texture in pixels
+    uint height;                //------------------------
+    uint tile_size;             //Size of tiles
+    Coord2d atlas_uvs;          //Difference in UV coordinates per texture
+    uchar* imageData = nullptr; //Only used if TEXTURE_STORE is enabled on generation
 } Texture;
 
 typedef struct Font{
@@ -130,7 +129,6 @@ typedef struct Image{
 typedef struct Block{
     uint atlas_index;   //Index of texture
     uchar options;      //Tile bitflags
-    uint material;  //Tile material type
     uint drop_id;       //ID of resource to drop
     uint drop_count;    //drop count
 }Block;
@@ -140,6 +138,11 @@ typedef struct Item{
     uint atlas_index;
 }Item;
 
+typedef struct Storage{
+    uchar items[STORAGE_SIZE];
+    uchar counts[STORAGE_SIZE];
+}Storage;
+
 //Simple AABB
 typedef struct BoundingBox{
     Coord2d p1; //Upper Left coordinate
@@ -148,28 +151,30 @@ typedef struct BoundingBox{
 
 //All Entity types must contain an Entity member 'e' as their first member
 typedef struct Entity{
-    uint        id;                     //id of the entity in g_entity_registry
-    Coord2d     position;               //position of the Entity, this is updated every tick based on its velocity and collisions
-    Coord2d     velocity;               //velocity of the Entity
-    uint        atlas_index;            //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
-    Coord2i     spritesheet_size;       //Size of the sprite sheet { directions, frames }
-    uint        frame_count;            //Number of animation frames
-    uint*       frame_order;            //Order of frames in array
-    BoundingBox col_bounds{};           //Bounding Box for entity
-    BoundingBox hit_bounds{};           //Hitbox for entity
-    Camera      camera{8,8};            //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
-    uint        move_state;             //Is entity moving
-    uint        direction;              //Direction entity facing
-    uint        animation_rate;         //Rate at which to animate movement speed
-    uint        type;                   //Type enum of Entity. Def. ENT_GENERIC
-    void        (*tick_func)(Entity* e); //Function executed on tick
+    uint        id;                         //id of the entity in g_entity_registry
+    Coord2d     position;                   //position of the Entity, this is updated every tick based on its velocity and collisions
+    Coord2d     velocity;                   //velocity of the Entity
+    uint        atlas_index;                //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
+    Coord2i     spritesheet_size;           //Size of the sprite sheet { directions, frames }
+    uint        frame_count;                //Number of animation frames
+    uint*       frame_order;                //Order of frames in array
+    BoundingBox col_bounds{};               //Bounding Box for entity
+    BoundingBox hit_bounds{};               //Hitbox for entity
+    Camera      camera{8,8};                //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
+    uint        move_state;                 //Is entity moving
+    uint        direction;                  //Direction entity facing
+    uint        animation_rate;             //Rate at which to animate movement speed
+    uint        health;                     //
+    uint        type;                       //Type enum of Entity. Def. ENT_GENERIC
+    void        (*tick_func)(Entity* e);    //Function executed on tick
 } Entity;
 
 //World chunk
 typedef struct Chunk{
-    Coord2i pos{};                    //Chunk coordinates
-    uchar overlay_tiles[256]{};       //Base tiles
-    uchar foreground_tiles[256]{};    //Overlay tiles
+    Coord2i pos{};                  //Chunk coordinates
+    uchar overlay_tiles[256]{};     //Base tiles
+    uchar background_tiles[256]{};  //Overlay tiles
+    Texture* render_texture = nullptr; //Render textures
 } Chunk;
 
 typedef struct Time{
@@ -177,6 +182,7 @@ typedef struct Time{
     double tick_delta;  //Real time since last tick
     double delta;       //Time since last frame
     double global;      //Absolute time since game was started
+    bool   paused;      //Pause time
 } Time;
 
 //Timer reference ID
@@ -219,11 +225,13 @@ extern Font* g_def_font;
 Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);               //Generate Texture Object
 Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);  //Load a 24-bit BMP
 void        texture_bind(Texture* t, GLuint sampler);                                               //Bind texture to GL_TEXTURE_2D
+void        texture_destroy(Texture* t);                                                            //Delete texture
 
 //minicraft_world.cpp
 void world_set_chunk_callbacks(
-        Chunk* (*load_callback)(Coord2i coord),
-        void   (*unload_callback)(Chunk* chunk)
+        Chunk*      (*load_callback)(Coord2i coord),
+        void        (*unload_callback)(Chunk* chunk),
+        Texture*    (*texture_callback)(Chunk* chunk)
 );  //Set callbacks for world loading
 
 void    world_populate_chunk_buffer(Entity* viewport_e);                //Populate Chunk Buffer
@@ -231,16 +239,18 @@ Chunk*  world_get_chunk(Coord2i ccoord);                                //Find a
 void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set tile of chunk to value
 Chunk*  world_chunkfile_read(const std::string& path, Coord2i ccoord);  //read chunk from file
 void    world_chunkfile_write(const std::string& path, Chunk* chunk);   //write chunk to chunkfile
+void    world_chunk_refresh_metatextures(Chunk* chunk);                  //Refresh chunk rendering metatexture
 std::map<Coord2i, Coord2i> world_get_local_coordinates(Coord2i gcoord); //Get chunk and tile from global tile coordinate
 
 //minicraft_rendering.cpp
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us);                 //Init OpenGL, GLFW, and create window
-void        rendering_draw_chunk(Chunk* chunk, Texture* atlas_texture, Entity* viewport_e);                 //Draw a chunk
+void        rendering_draw_chunk(Chunk* chunk, Entity* viewport_e);
 void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);              //Draw an entity
-void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);                            //Draw all entities in g_entity_registry
-void        rendering_draw_chunk_buffer(Texture* atlas_texture, Entity* viewport_e);                        //Draw the chunk buffer
-void        rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2i pos);  //Draw text
-void        rendering_draw_hud(uint health, Texture* ui_texture_sheet);                                     //Draw hud
+void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);           //Draw all entities in g_entity_registry
+void        rendering_draw_chunk_buffer(Entity* viewport_e);
+void        rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2d pos);  //Draw text
+void        rendering_draw_bar(uint value, Coord2i position, Texture* ui_texture, uint atlas_index);
+void        rendering_draw_cursor(Texture* ui_texture, uint atlas_index);
 void        rendering_draw_dialog(const std::string& title, const std::string& message, Font* font);        //Draw a dialog
 Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                               //Get world position of viewport position
 void        rendering_update_chunk_texture(Chunk* c);                                                       //Update chunk texture
@@ -264,6 +274,7 @@ void time_update_time(double glfw_time);                    //Update time
 int  time_get_framerate();                                  //Get FPS
 void time_set_tick_callback(void (*callback_function)());   //Add a function pointer to list of functions called every tick
 Timer* time_timer_start(long duration);                     //Start a timer and return a timer id
+void time_callback_start(long duration, void (*callback_function)(void* passthough), void* passthough); //Start callback timer
 bool time_timer_finished(Timer*& t);                        //check if timer is finished, if finished, deletes the timer
 void time_timer_cancel(Timer*& t);                          //end and delete the timer
 
@@ -275,7 +286,7 @@ void    entity_tick();                                                          
 Coord2d entity_collision(Entity* entity, Coord2d delta);                        //Check entity collision
 Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
-
+void    entity_damage(Entity* entity, uint damage);
 /*---inline util functions---*/
 
 //Fake GL function to use Color instead of 3ub
@@ -319,7 +330,6 @@ inline double distancec2d(Coord2d a, Coord2d b){
     return sqrt( std::pow((b.x - a.x), 2) +  std::pow((b.y - a.y), 2));
 }
 
-//What does this even do?
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
     uint substri = executable_path.find_last_of('/');
     return executable_path.substr(0, substri) + "/" + resource_name;

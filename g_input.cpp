@@ -6,26 +6,26 @@
 
 #include "geode.h"
 
-bool k_keys[GLFW_KEY_LAST + 1];
-bool m_keys[GLFW_KEY_LAST + 1]; //GLFW_MOUSE_BUTTON_LAST = 7, plenty of mice have more than that
+bool i_k_keys[GLFW_KEY_LAST + 1];
+bool i_m_keys[GLFW_KEY_LAST + 1]; //GLFW_MOUSE_BUTTON_LAST = 7, plenty of mice have more than that
 
-int k_actions[GLFW_KEY_LAST + 1];
-int m_actions[GLFW_KEY_LAST + 1];
-Coord2d m_pos{0, 0};
+int i_k_actions[GLFW_KEY_LAST + 1];
+int i_m_actions[GLFW_KEY_LAST + 1];
+Coord2d i_m_pos{0, 0};
 
 void input_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods){
-    k_keys[key]     = action != GLFW_RELEASE;
-    k_actions[key]  = action;
+    i_k_keys[key]     = action != GLFW_RELEASE;
+    i_k_actions[key]  = action;
 }
 
 void input_mouse_button_callback(GLFWwindow* window, int button, int action, int mods){
-    m_keys[button]      = action != GLFW_RELEASE;
-    m_actions[button]   = action;
+    i_m_keys[button]      = action != GLFW_RELEASE;
+    i_m_actions[button]   = action;
 }
 
 void input_mouse_position_callback(GLFWwindow* window, double xpos, double ypos){
-    m_pos.x = xpos;
-    m_pos.y = ypos;
+    i_m_pos.x = xpos;
+    i_m_pos.y = ypos;
 }
 
 void input_register_callbacks(GLFWwindow* window){
@@ -34,19 +34,19 @@ void input_register_callbacks(GLFWwindow* window){
     glfwSetCursorPosCallback(window, input_mouse_position_callback);
 }
 
-bool input_get_key(int keycode)         { return k_keys[keycode]; }
-bool input_get_button(int keycode)      { return m_keys[keycode]; }
-bool input_get_key_down(int keycode)    { return k_actions[keycode] == GLFW_PRESS; }
-bool input_get_key_up(int keycode)      { return k_actions[keycode] == GLFW_RELEASE; }
-bool input_get_button_down(int keycode) { return m_actions[keycode] == GLFW_PRESS; }
-bool input_get_button_up(int keycode)   { return m_actions[keycode] == GLFW_RELEASE; }
-Coord2d input_mouse_position()          { return m_pos; }
+bool input_get_key(int keycode)         { return i_k_keys[keycode]; }
+bool input_get_button(int keycode)      { return i_m_keys[keycode]; }
+bool input_get_key_down(int keycode)    { return i_k_actions[keycode] == GLFW_PRESS; }
+bool input_get_key_up(int keycode)      { return i_k_actions[keycode] == GLFW_RELEASE; }
+bool input_get_button_down(int keycode) { return i_m_actions[keycode] == GLFW_PRESS; }
+bool input_get_button_up(int keycode)   { return i_m_actions[keycode] == GLFW_RELEASE; }
+Coord2d input_mouse_position()          { return i_m_pos; }
 
 void input_poll_input(){
     //Reset all actions
     for(int i = 0; i <= GLFW_KEY_LAST; i++){
-        m_actions[i] = -1;
-        k_actions[i] = -1;
+        i_m_actions[i] = -1;
+        i_k_actions[i] = -1;
     }
 
     glfwPollEvents();

@@ -27,6 +27,9 @@ Texture* texture_generate(Image* img, uchar texture_load_options, uint tile_size
         textureptr -> atlas_uvs.x = textureptr -> atlas_uvs.y = 1.0;
     }
 
+    if(texture_load_options & TEXTURE_STORE){
+        textureptr -> imageData = img -> imageData;
+    }
 
     //Upload image data to openGL
     glBindTexture(GL_TEXTURE_2D, textureptr -> id);
@@ -125,4 +128,9 @@ Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, u
 void texture_bind(Texture* t, GLuint sampler){
     glActiveTexture(GL_TEXTURE0 + sampler);
     glBindTexture(GL_TEXTURE_2D, t -> id);
+}
+
+void texture_destroy(Texture* t){
+    glDeleteTextures(1, &(t -> id));
+    delete[](t);
 }
