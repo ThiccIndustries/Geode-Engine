@@ -78,8 +78,8 @@ Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, u
     colorType   = *(int*) &header[0x1C];
 
 #ifdef DEBUG
-    std::cout << (int)*(uchar*) &header[0x13] << std::endl;
-    std::cout << (uint)width << " : " << (uint)height << std::endl;
+       << (int)*(uchar*) &header[0x13] << std::endl;
+       << (uint)width << " : " << (uint)height << std::endl;
 #endif
     if(colorType != 24){
         error("Incompatible texture.", "Texture file: " + path + " is not in 24 bit color mode.");

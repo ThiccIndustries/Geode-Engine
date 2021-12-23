@@ -27,7 +27,6 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     double aspect = (double)mode->width / (double)mode -> height;
 
     height  = width * (1.0f/ aspect);
-    std::cout << width << " " << height << std::endl;
 
     int scale1 = mode->width / width;
     int scale2 = mode->height / height;

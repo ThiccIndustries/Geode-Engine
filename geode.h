@@ -133,16 +133,6 @@ typedef struct Block{
     uint drop_count;    //drop count
 }Block;
 
-//Inventory item
-typedef struct Item{
-    uint atlas_index;
-}Item;
-
-typedef struct Storage{
-    uchar items[STORAGE_SIZE];
-    uchar counts[STORAGE_SIZE];
-}Storage;
-
 //Simple AABB
 typedef struct BoundingBox{
     Coord2d p1; //Upper Left coordinate
@@ -167,6 +157,7 @@ typedef struct Entity{
     uint        health;                     //
     uint        type;                       //Type enum of Entity. Def. ENT_GENERIC
     void        (*tick_func)(Entity* e);    //Function executed on tick
+    void        (*death_func)(Entity* e);   //Function executed on death
 } Entity;
 
 //World chunk
@@ -205,7 +196,6 @@ extern Time* g_time;        //Global time object
 //minicraft_world.cpp
 extern Chunk* g_chunk_buffer[];    //Contains loaded chunks
 extern Block* g_block_registry[];  //Contains all Block types
-extern Item*  g_item_registry[];   //Contains all Item types
 
 //minicraft_entity.cpp
 extern Entity*  g_entity_registry[]; //All active entities
@@ -297,7 +287,7 @@ inline void glColor1c(const Color& c){
 //Exit the game with an error message
 inline void error(const std::string& error_message, const std::string& console) {
     if (g_debug){
-        std::cout << console << std::endl;
+           std::cout << console << std::endl;
     }
     Timer* t = time_timer_start(TIME_TPS * 10);
 

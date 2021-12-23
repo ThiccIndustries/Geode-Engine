@@ -82,7 +82,11 @@ void entity_tick(){
 
         if(e == nullptr)
             continue;
-        
+
+        //Skip entities which are dead but not deleted yet
+        if(e -> health == 0)
+            continue;
+
         e -> move_state = ENT_STATE_STATIONARY;
         entity_move(e, e->velocity, true);
 
@@ -94,7 +98,7 @@ void entity_tick(){
 
 Coord2d entity_collision(Entity* entity, Coord2d delta){
 
-    //std::cout << delta.x << " " << delta.y << std::endl;
+    //   << delta.x << " " << delta.y << std::endl;
 
     Coord2d new_ent_pos = entity -> position + delta;
 
@@ -199,7 +203,7 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
 }
 Entity* entity_hit(Entity* entity, Coord2d delta){
 
-    //std::cout << delta.x << " " << delta.y << std::endl;
+    //   << delta.x << " " << delta.y << std::endl;
 
     Coord2d new_ent_pos = entity -> position + delta;
 
@@ -249,7 +253,7 @@ struct shake_event{
     time_callback_start(1, [](void *ptr){
         double dx = (((double)rand() / RAND_MAX) * 4) - 2;
         double dy = (((double)rand() / RAND_MAX) * 4) - 2;
-        std::cout << dx << " " << dy << std::endl;
+           << dx << " " << dy << std::endl;
         shake_event* shake = (shake_event*)ptr;
 
         shake-> e -> camera.position = shake -> e -> camera.position + Coord2d{dx, dy};
@@ -259,10 +263,12 @@ struct shake_event{
 
 void entity_damage(Entity* entity, uint damage){
     if(damage >= entity -> health)
-        entity_delete(entity -> id);
+    {
+        entity->health = 0;
+        entity->death_func(entity);
+    }
 
     entity -> health -= damage;
-    //camera_shake(entity, entity -> camera, 10);
 }
 
 

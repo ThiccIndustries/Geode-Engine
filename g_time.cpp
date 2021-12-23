@@ -41,16 +41,17 @@ void time_update_time(double glfw_time){
         g_time -> tick_delta += g_time -> delta;
 
     //Tick all callback timers
-    for(uint i = 0; i < i_callback_highest_id; i++){
-        if(callbacks[i] == nullptr)
+    for(uint i = 0; i <= i_callback_highest_id; i++){
+        if(callbacks[i] == nullptr) {
             continue;
+        }
 
         if(g_time -> tick >= (callbacks[i] -> starting_tick + callbacks[i] -> duration)){
-            callbacks[i] -> callback( callbacks[i] -> passthough_ptr);
+            callbacks[i] -> callback( callbacks[i] -> passthough_ptr );
             callbacks[i] = nullptr;
             //Recalculate g_entity_highest_id
             if(i == i_callback_highest_id){
-                for(uint j = 255; j >= 0; --j){
+                for(int j = 255; j >= 0; j--){
                     if(callbacks[j] != nullptr) {
                         i_callback_highest_id = j;
                         break;
@@ -82,6 +83,8 @@ void time_callback_start(long duration, void (*callback_function)(void* passthou
         if(callbacks[i] == nullptr){
             callbacks[i] = callback;
 
+            std::cout << i << std::endl;
+            std::cout << callbacks[i] << std::endl;
             if(i > i_callback_highest_id)
                 i_callback_highest_id = i;
 
@@ -115,7 +118,7 @@ void time_timer_cancel(Timer*& t){
         return;
 
 #ifdef DEBUG
-    std::cout << "Timer #" << t << " ended." << std::endl;
+       << "Timer #" << t << " ended." << std::endl;
 #endif
     delete t;
     t = nullptr;

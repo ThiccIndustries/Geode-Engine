@@ -51,8 +51,6 @@ void world_populate_chunk_buffer(Entity* viewport_e){
             g_chunk_buffer[chunki] = chunk_load_callback(Coord2i{chunk_x, chunk_y});
         }
     }
-
-    std::cout << " " << std::endl;
 }
 
 void world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value){
