@@ -84,7 +84,7 @@ void entity_tick(){
             continue;
 
         //Skip entities which are dead but not deleted yet
-        if(e -> health == 0)
+        if(e -> health <= 0)
             continue;
 
         e -> move_state = ENT_STATE_STATIONARY;
@@ -262,13 +262,15 @@ struct shake_event{
 }*/
 
 void entity_damage(Entity* entity, uint damage){
-    if(damage >= entity -> health)
-    {
-        entity->health = 0;
-        entity->death_func(entity);
+    if(entity -> health > 0) {
+        entity->health -= damage;
+        if(entity -> health < 0)
+            entity -> health = 0;
     }
 
-    entity -> health -= damage;
+    if(entity -> health == 0){
+        entity->death_func(entity);
+    }
 }
 
 

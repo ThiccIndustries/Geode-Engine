@@ -32,8 +32,8 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     int scale2 = mode->height / height;
 
     int scale = std::max(scale1, scale2);
-
     scale -= 1;
+
     //Create window and set context
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
@@ -304,6 +304,16 @@ void rendering_draw_text(const std::string& text, uint size, Font* font, Color c
 
         pos_x = pos.x + (i * tilesize);
 
+        glColor3ub(0, 0, 0);
+        glBegin(GL_QUADS);{
+            glTexCoord2d(uv_x                           , uv_y                              ); glVertex2d(pos_x + 1           , pos_y + 1);
+            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y                              ); glVertex2d(pos_x + 1 + tilesize, pos_y + 1);
+            glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y + font -> t -> atlas_uvs.y   ); glVertex2d(pos_x + 1 + tilesize, pos_y + 1 + tilesize);
+            glTexCoord2d(uv_x                           , uv_y + font -> t -> atlas_uvs.y   ); glVertex2d(pos_x + 1           , pos_y + 1 + tilesize);
+        }
+        glEnd();
+
+        glColor1c(color);
         glBegin(GL_QUADS);{
             glTexCoord2d(uv_x                           , uv_y                              ); glVertex2d(pos_x           , pos_y);
             glTexCoord2d(uv_x + font -> t -> atlas_uvs.x, uv_y                              ); glVertex2d(pos_x + tilesize, pos_y);

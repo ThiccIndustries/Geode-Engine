@@ -154,7 +154,7 @@ typedef struct Entity{
     uint        move_state;                 //Is entity moving
     uint        direction;                  //Direction entity facing
     uint        animation_rate;             //Rate at which to animate movement speed
-    uint        health;                     //
+    int         health;                     //
     uint        type;                       //Type enum of Entity. Def. ENT_GENERIC
     void        (*tick_func)(Entity* e);    //Function executed on tick
     void        (*death_func)(Entity* e);   //Function executed on death
@@ -169,11 +169,11 @@ typedef struct Chunk{
 } Chunk;
 
 typedef struct Time{
-    long   tick;        //The number of game ticks
-    double tick_delta;  //Real time since last tick
-    double delta;       //Time since last frame
-    double global;      //Absolute time since game was started
-    bool   paused;      //Pause time
+    long   tick = 0;            //The number of game ticks
+    double tick_delta = 0;      //Real time since last tick
+    double delta = 0;           //Time since last frame
+    double global = 0;          //Absolute time since game was started
+    bool   paused = false;  //Pause time
 } Time;
 
 //Timer reference ID
@@ -182,11 +182,12 @@ typedef struct Timer{
     long starting_tick;
 } Timer;
 
-/*--- Constants ---*/
+/*--- Color constants ---*/
 const Color COLOR_RED   = {255, 0  , 0};
 const Color COLOR_GREEN = {0  , 255, 0};
 const Color COLOR_BLUE  = {0  , 0  , 255};
 const Color COLOR_WHITE = {255, 255, 255};
+const Color COLOR_BLACK = {0, 0, 0};
 
 /*--- Global objects and registries. Globals are bad but so am I ---*/
 
@@ -321,8 +322,8 @@ inline double distancec2d(Coord2d a, Coord2d b){
 }
 
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
-    uint substri = executable_path.find_last_of('/');
-    return executable_path.substr(0, substri) + "/" + resource_name;
+    uint substri = executable_path.find_last_of('\\');
+    return executable_path.substr(0, substri) + "\\" + resource_name;
 }
 
 #endif
