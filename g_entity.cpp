@@ -36,6 +36,12 @@ void entity_delete(uint id){
             }
         }
     }
+    if(g_entity_registry[id] -> type == 5 && !g_penispenis){
+        std::cout << "problem time!" << std::endl;
+    }
+
+    if(g_entity_registry[id] -> type == 5)
+        g_penispenis = false;
 
     delete g_entity_registry[id];
     g_entity_registry[id] = nullptr;
@@ -275,7 +281,7 @@ void entity_damage(Entity* entity, uint damage){
 
 
 bool entity_AABB(BoundingBox a, BoundingBox b){
-    return (a.p1.x <= b.p2.x && a.p2.x >= b.p1.x) && (a.p1.y <= b.p2.y && a.p2.y >= b.p1.y);
+    return (a.p1.x < b.p2.x && a.p2.x > b.p1.x) && (a.p1.y < b.p2.y && a.p2.y > b.p1.y);
 }
 
 

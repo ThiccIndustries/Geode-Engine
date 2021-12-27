@@ -64,7 +64,7 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
 }
 
 void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
-    double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS);
+    double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
     double viewport_x = viewport_e -> position.x + (viewport_e -> camera.position.x);
     double viewport_y = viewport_e -> position.y + (viewport_e -> camera.position.y);
@@ -156,7 +156,7 @@ void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c){
 }
 
 void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e){
-    double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS);
+    double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
     double viewport_x = (viewport_e -> position.x + (viewport_e -> camera.position.x));
     double viewport_y = (viewport_e -> position.y + (viewport_e -> camera.position.y));

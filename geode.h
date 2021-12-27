@@ -188,7 +188,7 @@ const Color COLOR_GREEN = {0  , 255, 0};
 const Color COLOR_BLUE  = {0  , 0  , 255};
 const Color COLOR_WHITE = {255, 255, 255};
 const Color COLOR_BLACK = {0, 0, 0};
-
+extern bool g_penispenis;
 /*--- Global objects and registries. Globals are bad but so am I ---*/
 
 //minicraft_time.cpp
