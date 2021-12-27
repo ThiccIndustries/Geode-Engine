@@ -36,7 +36,7 @@
 
 #define STORAGE_SIZE 96
 
-#define TIME_TPS 64
+#define TIME_TPS 32
 
 /*--- Enums and structs ---*/
 
