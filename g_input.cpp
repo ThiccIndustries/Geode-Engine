@@ -36,11 +36,38 @@ void input_register_callbacks(GLFWwindow* window){
 
 bool input_get_key(int keycode)         { return i_k_keys[keycode]; }
 bool input_get_button(int keycode)      { return i_m_keys[keycode]; }
-bool input_get_key_down(int keycode)    { return i_k_actions[keycode] == GLFW_PRESS; }
-bool input_get_key_up(int keycode)      { return i_k_actions[keycode] == GLFW_RELEASE; }
-bool input_get_button_down(int keycode) { return i_m_actions[keycode] == GLFW_PRESS; }
-bool input_get_button_up(int keycode)   { return i_m_actions[keycode] == GLFW_RELEASE; }
 Coord2d input_mouse_position()          { return i_m_pos; }
+
+bool input_get_key_down(int keycode){ 
+    if(i_k_actions[keycode] == GLFW_PRESS){
+        i_k_actions[keycode] = -1;
+        return true;
+    }
+    return false;
+}
+
+bool input_get_key_up(int keycode){ 
+    if(i_k_actions[keycode] == GLFW_RELEASE){
+        i_k_actions[keycode] = -1;
+        return true;
+    }
+    return false;
+}
+
+bool input_get_button_down(int keycode){ 
+    if(i_m_actions[keycode] == GLFW_PRESS){
+        i_m_actions[keycode] = -1;
+        return true;
+    }
+}
+
+bool input_get_button_up(int keycode){ 
+    if(i_m_actions[keycode] == GLFW_RELEASE){
+        i_m_actions[keycode] = -1;
+        return true;
+    }
+    return false;
+}
 
 void input_poll_input(){
     glfwPollEvents();
