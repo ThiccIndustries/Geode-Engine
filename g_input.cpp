@@ -7,7 +7,7 @@
 #include "geode.h"
 
 bool i_k_keys[GLFW_KEY_LAST + 1];
-bool i_m_keys[GLFW_KEY_LAST + 1]; //GLFW_MOUSE_BUTTON_LAST = 7, plenty of mice have more than that
+bool i_m_keys[GLFW_KEY_LAST + 1]; //GLFW_MOUSE_BUTTON_LAST is only 7, plenty of mice have more than that
 
 int i_k_actions[GLFW_KEY_LAST + 1];
 int i_m_actions[GLFW_KEY_LAST + 1];
@@ -43,11 +43,14 @@ bool input_get_button_up(int keycode)   { return i_m_actions[keycode] == GLFW_RE
 Coord2d input_mouse_position()          { return i_m_pos; }
 
 void input_poll_input(){
+    glfwPollEvents();
+}
+
+void input_tick(){
     //Reset all actions
     for(int i = 0; i <= GLFW_KEY_LAST; i++){
         i_m_actions[i] = -1;
         i_k_actions[i] = -1;
     }
-
     glfwPollEvents();
 }

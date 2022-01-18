@@ -36,25 +36,17 @@ void entity_delete(uint id){
             }
         }
     }
-    if(g_entity_registry[id] -> type == 5 && !g_penispenis){
-        std::cout << "problem time!" << std::endl;
-    }
-
-    if(g_entity_registry[id] -> type == 5)
-        g_penispenis = false;
 
     delete g_entity_registry[id];
     g_entity_registry[id] = nullptr;
 
 }
 
-//TODO: test each movement axis separately
 void entity_move(Entity* entity, Coord2d delta, bool respect_collisions){
     if(delta.x == 0 && delta.y == 0)
         return;
 
     //Split axis into two separate movement checks to allow "slipping" on a wall
-    //TODO: Was recursion *really* the best way to do this? This feels like a BS APCS test question.
     if(delta.x != 0 && delta.y != 0){
         entity_move(entity, {delta.x, 0}, respect_collisions);
         entity_move(entity, {0, delta.y}, respect_collisions);
@@ -138,7 +130,6 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
              || (g_block_registry[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)))
                 continue;
 
-            //TODO: is this even right?
             BoundingBox tile_bb = { {(rel_tile.x * 16.0) + (chunk.x * 256.0)      , (rel_tile.y * 16.0) + (chunk.y * 256.0)},
                                     {(rel_tile.x * 16.0) + (chunk.x * 256.0) + 16 , (rel_tile.y * 16.0) + (chunk.y * 256.0) + 16} };
 

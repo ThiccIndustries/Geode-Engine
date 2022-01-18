@@ -6,5 +6,5 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS}")
 
 
 find_package(OpenGL REQUIRED)
-add_library(Geode-Lib g_entity.cpp g_input.cpp g_rendering.cpp g_texture.cpp g_time.cpp g_world.cpp geode.h)
-target_link_libraries(Geode-Lib -lglew32 -lglfw3 -lopengl32)
+add_library(Geode-Lib g_entity.cpp g_input.cpp g_rendering.cpp g_texture.cpp g_time.cpp g_world.cpp g_ui.cpp geode.h)
+target_link_libraries(Geode-Lib -lGLEW -lglfw -lGL)

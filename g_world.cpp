@@ -12,6 +12,7 @@ Chunk* g_chunk_buffer[9]{nullptr};
 Chunk*  (*chunk_load_callback)(Coord2i coord);
 void    (*chunk_unload_callback)(Chunk* chunk);
 Texture* (*chunk_texture_callback)(Chunk* chunk);
+void world_modify_image(Chunk* chunk, Image* meta_img, Texture* terrain_t, bool skip, bool tiles[256], bool overlays[256], int anim_index);
 
 void world_set_chunk_callbacks(
         Chunk*  (*load_callback)(Coord2i coord),
@@ -122,10 +123,14 @@ void world_chunkfile_write(const std::string& path, Chunk* chunk){
 //TODO: Consider moving this to g_rendering.cpp?
 // no.
 void world_chunk_refresh_metatextures(Chunk* chunk){
+    bool anim_tiles[256] = {0};
+    bool anim_overlays[256] = {0};
+    bool anim = false;
+
     //Cleanup old to prevent leaks
-    if(chunk -> render_texture != nullptr) {
-        texture_destroy(chunk->render_texture);
-        chunk -> render_texture = nullptr;
+    if(chunk -> render_texture[0] != nullptr) {
+        texture_destroy(chunk->render_texture[0]);
+        chunk -> render_texture[0] = nullptr;
     }
 
     Texture* terrain_t = chunk_texture_callback(chunk);
@@ -139,6 +144,19 @@ void world_chunk_refresh_metatextures(Chunk* chunk){
         error("Rndr txtr not TEXTURE_STORE.", "Render texture recieved for Chunk {" + std::to_string(chunk->pos.x) + ", " + std::to_string(chunk->pos.y) + "} did not have TEXTURE_STORE set.");
     }
 
+    for(int i = 0; i < 256; i++){
+        if( g_block_registry[chunk -> background_tiles[i]] -> options & TILE_ANIMATED){
+
+            anim_tiles[i] = true;
+            anim = true;
+        }
+
+        if( g_block_registry[chunk -> overlay_tiles[i]] -> options & TILE_ANIMATED){
+            anim_overlays[i] = true;
+            anim = true;
+        }
+            
+    }
 
     Image* meta_img = new Image;
 
@@ -146,11 +164,37 @@ void world_chunk_refresh_metatextures(Chunk* chunk){
     meta_img -> width     = 16 * terrain_t->tile_size;
     meta_img -> imageData = new uchar[ meta_img -> height * meta_img -> width * 4 ];
 
-    uint tiles_x = terrain_t->width / terrain_t->tile_size; //Number of tiles wide
-
     for(uint i = 0; i < meta_img -> height * meta_img -> width * 4; ++i){
         meta_img->imageData[i] = 255;
     }
+
+    world_modify_image(chunk, meta_img, terrain_t, false, nullptr, nullptr, 0);
+    chunk -> render_texture[0] = texture_generate(meta_img, TEXTURE_SINGLE, 256);
+
+    //No animated tiles, we're all done here.
+    if(!anim){
+
+        delete[] meta_img -> imageData;
+        delete meta_img;
+
+        chunk -> render_texture[3] = chunk -> render_texture[2] = chunk -> render_texture[1] = nullptr; //This should already be the case but its safer.
+
+        return;
+    }
+
+    for(int i = 1; i < 4; i++){
+        world_modify_image(chunk, meta_img, terrain_t, true, anim_tiles, anim_overlays, i);
+        chunk -> render_texture[i] = texture_generate(meta_img, TEXTURE_SINGLE, 256);
+    }
+
+    delete[] meta_img -> imageData;
+    delete meta_img;
+
+}
+
+
+void world_modify_image(Chunk* chunk, Image* meta_img, Texture* terrain_t, bool skip, bool tiles[256], bool overlays[256], int anim_frame){
+    uint tiles_x = terrain_t->width / terrain_t->tile_size; //Number of tiles wide
 
     for(uint y = 0; y < meta_img -> height; ++y) {
         uint ctile_y = y / 16;   //Position of tile inside chunk
@@ -158,6 +202,13 @@ void world_chunk_refresh_metatextures(Chunk* chunk){
         for (uint x = 0; x < meta_img -> width; ++x) {
             uint ctile_x = x / 16;       //Position of tile inside chunk
             uint pixel_x = x % 16;       //Position of pixel inside tile
+            
+            uint ctile_i = (ctile_y * 16) + ctile_x;
+
+            if(skip && (!tiles[ctile_i] && !overlays[ctile_i]))
+                continue;
+
+            //Non animated tiles should be skipped at this point.
 
             Block* block = g_block_registry[chunk -> background_tiles[ctile_x + (ctile_y * 16)]];
 
@@ -173,9 +224,17 @@ void world_chunk_refresh_metatextures(Chunk* chunk){
             uint tile_y = tile / tiles_x;
 
             uint meta_pixel = (meta_img->width * 4 * y) + (x * 4);
-            uint render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( ((tile_y * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
+
+            uint anim_index = 0;
+
+            if(skip)
+                anim_index = anim_frame * (tiles[ctile_i] ? 1 : 0);
+
+            uint render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( (((tile_y + anim_index) * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
 
             memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> imageData[render_pixel]), 4);
+
+            /* Overlay tiles */
 
             if(chunk->overlay_tiles[ctile_x + (ctile_y * 16)] == 0)
                 continue;
@@ -193,15 +252,16 @@ void world_chunk_refresh_metatextures(Chunk* chunk){
             tile_x = tile % tiles_x;
             tile_y = tile / tiles_x;
 
-            render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( ((tile_y * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
+            anim_index = 0;
+
+            if(skip)
+                anim_index = anim_frame * (overlays[ctile_i] ? 1 : 0);
+
+            render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( (((tile_y + anim_index) * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
             if(terrain_t -> imageData[render_pixel + 3] == 0)
                 continue;
 
             memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> imageData[render_pixel]), 3);
         }
     }
-
-    chunk -> render_texture = texture_generate(meta_img, TEXTURE_SINGLE, 256);
-    delete[] meta_img -> imageData;
-    delete meta_img;
 }

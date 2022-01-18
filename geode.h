@@ -26,12 +26,13 @@
 
 #define TEXTURE_MULTIPLE 0x01
 #define TEXTURE_SINGLE   0x02
-#define TEXTURE_STORE    0x04   //Save the texture data outside of OpenGL Texture Buffer
+#define TEXTURE_STORE    0x04   //Duplicate the texture data for uh... reasons?
 
-#define TILE_SOLID       0x01   //Tile has collisions
-#define TILE_TEX_FLIP_X  0x02   //Tile should be rendered with texture flipped across X axis
-#define TILE_TEX_FLIP_Y  0x04   //Tile should be rendered with texture flipped across Y axis
-
+#define TILE_SOLID       0b00000001   //Tile has collisions
+#define TILE_TEX_FLIP_X  0b00000010   //Tile should be rendered with texture flipped across X axis
+#define TILE_TEX_FLIP_Y  0b00000100   //Tile should be rendered with texture flipped across Y axis
+#define TILE_ANIMATED    0b00001000   //Animated tile
+#define TILE_LAST TILE_ANIMATED
 #define ENTITY_MAX 0xFFFF
 
 #define STORAGE_SIZE 96
@@ -165,7 +166,7 @@ typedef struct Chunk{
     Coord2i pos{};                  //Chunk coordinates
     uchar overlay_tiles[256]{};     //Base tiles
     uchar background_tiles[256]{};  //Overlay tiles
-    Texture* render_texture = nullptr; //Render textures
+    Texture* render_texture[4] = {nullptr}; //Render textures
 } Chunk;
 
 typedef struct Time{
@@ -182,14 +183,72 @@ typedef struct Timer{
     long starting_tick;
 } Timer;
 
+enum PanelType{
+    PANEL_EMPTY,
+    PANEL_BOX,
+    PANEL_TEXT,
+    PANEL_SPRITE,
+    PANEL_BUTTON
+};
+
+typedef struct Panel{
+    Coord2i position;
+    Coord2i size;
+    Color   foreground_color;
+    Color   background_color;
+    bool    has_background;
+    Panel** children;
+    uint    child_count = 0;
+    uint    type = PANEL_EMPTY;
+    
+    /* Dynamic panels only */
+    bool    dynamic = false;                        //Dynamic panel or static panel
+    bool    active = false;                         //Dynamic panel active or not
+    uint    id;                                     //Dynamic panels only
+    void*   packet;                                 //Dynamic panel packet
+    void    (*tick_func)(Panel* p, void* packet);   //Dynamic panel tick func.
+} Panel;
+
+typedef struct Panel_Text{
+    Panel p;
+    Font* font;
+    std::string text;
+
+    Panel_Text(){ p.type = PANEL_TEXT; };
+
+} Panel_Text;
+
+typedef struct Panel_Sprite{
+    Panel p;
+    Texture* texture;
+    uint atlas_index;
+    Panel_Sprite(){ p.type = PANEL_SPRITE; };
+
+} Panel_Sprite;
+
+void ui_button_tick(Panel* dp, void* v);
+typedef struct Panel_Button{
+    Panel p;
+
+    void* packet;
+    void (*click_func)(void* v);
+
+    Panel_Button(){ 
+        p.type = PANEL_BUTTON; 
+        p.dynamic = true;
+        p.active = false;
+        p.tick_func = &ui_button_tick;
+    };
+} Panel_Button;
+
 /*--- Color constants ---*/
 const Color COLOR_RED   = {255, 0  , 0};
 const Color COLOR_GREEN = {0  , 255, 0};
 const Color COLOR_BLUE  = {0  , 0  , 255};
 const Color COLOR_WHITE = {255, 255, 255};
 const Color COLOR_BLACK = {0, 0, 0};
-extern bool g_penispenis;
-/*--- Global objects and registries. Globals are bad but so am I ---*/
+
+/*--- Global objects and registries. ---*/
 
 //minicraft_time.cpp
 extern Time* g_time;        //Global time object
@@ -209,6 +268,10 @@ extern bool g_debug;
 //minicraft_rendering.cpp
 extern Video_Mode g_video_mode;
 extern Font* g_def_font;
+
+//g_ui.cpp
+extern Panel*   g_dynamic_panel_registry[]; //All rendering dynamic panels
+extern uint     g_dynamic_panel_highest_id; //Highest active UI panel    
 
 /*--- Functions ---*/
 
@@ -243,6 +306,7 @@ void        rendering_draw_text(const std::string& text, uint size, Font* font, 
 void        rendering_draw_bar(uint value, Coord2i position, Texture* ui_texture, uint atlas_index);
 void        rendering_draw_cursor(Texture* ui_texture, uint atlas_index);
 void        rendering_draw_dialog(const std::string& title, const std::string& message, Font* font);        //Draw a dialog
+void        rendering_draw_panel(Panel* panel);
 Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                               //Get world position of viewport position
 void        rendering_update_chunk_texture(Chunk* c);                                                       //Update chunk texture
 
@@ -259,7 +323,7 @@ bool input_get_button_down(int keycode);    //Get new mouse stroke
 bool input_get_button_up(int keycode);      //Get mouse button release
 Coord2d input_mouse_position();             //Get mouse position
 void input_poll_input();                    //Input poll
-
+void input_tick();
 //minicraft_input.cpp
 void time_update_time(double glfw_time);                    //Update time
 int  time_get_framerate();                                  //Get FPS
@@ -278,6 +342,15 @@ Coord2d entity_collision(Entity* entity, Coord2d delta);                        
 Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
 void    entity_damage(Entity* entity, uint damage);
+
+//g_ui.cpp
+void ui_tick();
+void ui_dynamic_panel_activate(Panel* dp);
+void ui_dynamic_panel_deactivate(Panel* dp);
+
+//UI Constructors
+Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value);
+
 /*---inline util functions---*/
 
 //Fake GL function to use Color instead of 3ub
@@ -292,7 +365,7 @@ inline void error(const std::string& error_message, const std::string& console) 
     }
     Timer* t = time_timer_start(TIME_TPS * 10);
 
-    while(!time_timer_finished(t)){
+    while(!time_timer_finished(t) && !glfwWindowShouldClose(g_video_mode.windowptr)){
         rendering_draw_dialog("GEODE ERROR", error_message, g_def_font);
         glfwSwapBuffers(g_video_mode.windowptr);
         glfwPollEvents();
@@ -322,8 +395,8 @@ inline double distancec2d(Coord2d a, Coord2d b){
 }
 
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
-    uint substri = executable_path.find_last_of('\\');
-    return executable_path.substr(0, substri) + "\\" + resource_name;
+    uint substri = executable_path.find_last_of('/');
+    return executable_path.substr(0, substri) + "/" + resource_name;
 }
 
 #endif

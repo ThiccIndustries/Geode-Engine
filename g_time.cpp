@@ -35,6 +35,7 @@ void time_update_time(double glfw_time){
     if(g_time -> tick_delta >= 1.0 / TIME_TPS) {
         g_time->tick++;
         tick_callback();
+        input_tick();
 
         g_time -> tick_delta = 0;
     }
