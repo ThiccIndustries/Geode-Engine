@@ -174,6 +174,7 @@ typedef struct Time{
     double tick_delta = 0;      //Real time since last tick
     double delta = 0;           //Time since last frame
     double global = 0;          //Absolute time since game was started
+    int    fps = 0;
     bool   paused = false;  //Pause time
 } Time;
 
@@ -316,17 +317,25 @@ void input_mouse_button_callback(GLFWwindow* window, int button, int actions, in
 void input_mouse_position_callback(GLFWwindow* window, double xpos, double ypos);           //Mouse position callback
 void input_register_callbacks(GLFWwindow* window);                                          //Register all callbacks with GLFW
 bool input_get_key(int keycode);            //Get key status
+bool input_get_button(int keycode);         //Get button status
+
 bool input_get_key_down(int keycode);       //Get keyboard button down event
 bool input_get_key_up(int keycode);         //Get keyboard button up event
-bool input_get_button(int keycode);         //Get button status
 bool input_get_button_down(int keycode);    //Get new mouse stroke
 bool input_get_button_up(int keycode);      //Get mouse button release
+
+//Only use per tick
+bool input_get_key_down_tick(int keycode);       //Get keyboard button down event
+bool input_get_key_up_tick(int keycode);         //Get keyboard button up event
+bool input_get_button_down_tick(int keycode);    //Get new mouse stroke
+bool input_get_button_up_tick(int keycode);      //Get mouse button release
+
 Coord2d input_mouse_position();             //Get mouse position
 void input_poll_input();                    //Input poll
 void input_tick();
+
 //minicraft_input.cpp
 void time_update_time(double glfw_time);                    //Update time
-int  time_get_framerate();                                  //Get FPS
 void time_set_tick_callback(void (*callback_function)());   //Add a function pointer to list of functions called every tick
 Timer* time_timer_start(long duration);                     //Start a timer and return a timer id
 void time_callback_start(long duration, void (*callback_function)(void* passthough), void* passthough); //Start callback timer
@@ -350,6 +359,7 @@ void ui_dynamic_panel_deactivate(Panel* dp);
 
 //UI Constructors
 Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value);
+Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval);
 
 /*---inline util functions---*/
 

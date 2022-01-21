@@ -27,7 +27,7 @@ int time_timer_purge();
 void time_update_time(double glfw_time){
     g_time -> delta = glfw_time - g_time -> global;
     g_time -> global = glfw_time;
-
+    g_time -> fps = (int)(1.0 / g_time -> delta);
     if(g_time -> paused) {
         return;
     }
@@ -64,10 +64,6 @@ void time_update_time(double glfw_time){
 
         }
     }
-}
-
-int time_get_framerate(){
-   return (int)(1.0 / g_time -> delta);
 }
 
 Timer* time_timer_start(long duration){

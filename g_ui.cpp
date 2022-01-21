@@ -86,8 +86,8 @@ void ui_button_tick(Panel* p, void* v){
 
     if( (pos.x >= p -> position.x && pos.x <= p -> position.x + p -> size.x)
     &&  (pos.y >= p -> position.y && pos.y <= p -> position.y + p -> size.y)
-    &&  input_get_button_down(GLFW_MOUSE_BUTTON_1)){
-
+    &&  input_get_button_down_tick(GLFW_MOUSE_BUTTON_1)){
+        
         pb -> click_func(pb -> packet);
     }
 }
@@ -126,4 +126,35 @@ Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, 
     }
 
     return bar;
+}
+
+Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval){
+    Panel_Text* t = new Panel_Text;
+    
+    t -> font = font;
+    t -> text = prefix + std::to_string(*value);
+   
+
+    struct Packet{
+        std::string prefix;
+        int* val;
+        uint last_update;
+        uint update_interval;
+    };
+
+    Packet* p = new Packet{prefix, value, g_time -> tick, update_interval};
+
+    t -> p.dynamic = true;
+    t -> p.packet = p;
+    t -> p.tick_func =[](Panel* p, void* v){
+        Packet* pac = (Packet*)v;
+
+        if(g_time -> tick - pac -> last_update < pac -> update_interval)
+            return;
+
+        pac -> last_update = g_time -> tick;
+        ((Panel_Text*)p) -> text = pac -> prefix + std::to_string(*(pac -> val));
+    };
+
+    return t;
 }

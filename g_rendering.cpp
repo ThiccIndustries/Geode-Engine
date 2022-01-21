@@ -497,8 +497,8 @@ void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position){
         }
         glEnd();
     }
-    glColor1c({255, 255, 255});
 
+    glColor1c({255, 255, 255});
     rendering_draw_text(p -> text, 1, p -> font, p -> p.foreground_color, Coord2d{(double)x1, (double)y1});
 }
 
