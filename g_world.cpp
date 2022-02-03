@@ -25,8 +25,8 @@ void world_set_chunk_callbacks(
 }
 
 void world_populate_chunk_buffer(Entity* viewport_e){
-    int player_chunk_x = floor((viewport_e -> position.x + (viewport_e -> camera.position.x)) / 256);
-    int player_chunk_y = floor((viewport_e -> position.y + (viewport_e -> camera.position.y)) / 256);
+    int player_chunk_x = floor((viewport_e -> transform.position.x + (viewport_e -> camera.position.x)) / 256);
+    int player_chunk_y = floor((viewport_e -> transform.position.y + (viewport_e -> camera.position.y)) / 256);
 
     for(int y = 0; y <= 2; ++y){
         for(int x = 0; x <= 2; ++x){

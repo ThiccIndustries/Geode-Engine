@@ -140,11 +140,17 @@ typedef struct BoundingBox{
     Coord2d p2; //Upper Right coordinate
 } BoundingBox;
 
+typedef struct Transform{
+    Coord2d position = {0, 0};
+    Coord2d velocity = {0, 0};
+    double rotation = 0.0;
+} Transform;
+
 //All Entity types must contain an Entity member 'e' as their first member
 typedef struct Entity{
     uint        id;                         //id of the entity in g_entity_registry
-    Coord2d     position;                   //position of the Entity, this is updated every tick based on its velocity and collisions
-    Coord2d     velocity;                   //velocity of the Entity
+    Transform    transform;                 //transform of the Entity, this is updated every tick based on its velocity and collisions
+
     uint        atlas_index;                //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
     Coord2i     spritesheet_size;           //Size of the sprite sheet { directions, frames }
     uint        frame_count;                //Number of animation frames

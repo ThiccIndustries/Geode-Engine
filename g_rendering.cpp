@@ -84,17 +84,17 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
 
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
-    double viewport_x = viewport_e -> position.x + (viewport_e -> camera.position.x);
-    double viewport_y = viewport_e -> position.y + (viewport_e -> camera.position.y);
+    double viewport_x = viewport_e -> transform.position.x + (viewport_e -> camera.position.x);
+    double viewport_y = viewport_e -> transform.position.y + (viewport_e -> camera.position.y);
 
-    Coord2d delta_x = {viewport_e -> velocity.x * tick_interp, 0};
+    Coord2d delta_x = {viewport_e -> transform.velocity.x * tick_interp, 0};
 
     if(entity_collision(viewport_e, delta_x) == delta_x)
-        viewport_x += viewport_e->velocity.x * tick_interp;
+        viewport_x += viewport_e->transform.velocity.x * tick_interp;
 
-    Coord2d delta_y = {0, viewport_e -> velocity.y * tick_interp};
+    Coord2d delta_y = {0, viewport_e -> transform.velocity.y * tick_interp};
     if(entity_collision(viewport_e, delta_y) == delta_y)
-        viewport_y += viewport_e->velocity.y * tick_interp;
+        viewport_y += viewport_e->transform.velocity.y * tick_interp;
 
     if(chunk == nullptr)
         return;
@@ -176,29 +176,29 @@ void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c){
 void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e){
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
-    double viewport_x = (viewport_e -> position.x + (viewport_e -> camera.position.x));
-    double viewport_y = (viewport_e -> position.y + (viewport_e -> camera.position.y));
+    double viewport_x = (viewport_e -> transform.position.x + (viewport_e -> camera.position.x));
+    double viewport_y = (viewport_e -> transform.position.y + (viewport_e -> camera.position.y));
 
-    Coord2d delta_x = {viewport_e -> velocity.x * tick_interp, 0};
+    Coord2d delta_x = {viewport_e -> transform.velocity.x * tick_interp, 0};
     if(entity_collision(viewport_e, delta_x) == delta_x)
-        viewport_x += viewport_e->velocity.x * tick_interp;
+        viewport_x += viewport_e->transform.velocity.x * tick_interp;
 
-    Coord2d delta_y = {0, viewport_e -> velocity.y * tick_interp};
+    Coord2d delta_y = {0, viewport_e -> transform.velocity.y * tick_interp};
     if(entity_collision(viewport_e, delta_y) == delta_y)
-        viewport_y += viewport_e->velocity.y * tick_interp;
+        viewport_y += viewport_e->transform.velocity.y * tick_interp;
 
     double scl = g_video_mode.world_scale;
-    double entity_x = entity -> position.x - (viewport_x - (g_video_mode.window_resolution.x / (2 * scl)));
-    double entity_y = entity -> position.y - (viewport_y - (g_video_mode.window_resolution.y / (2 * scl)));
+    double entity_x = entity -> transform.position.x - (viewport_x - (g_video_mode.window_resolution.x / (2 * scl)));
+    double entity_y = entity -> transform.position.y - (viewport_y - (g_video_mode.window_resolution.y / (2 * scl)));
 
 
-    delta_x = {entity -> velocity.x * tick_interp, 0};
+    delta_x = {entity -> transform.velocity.x * tick_interp, 0};
     if(entity_collision(entity, delta_x) == delta_x)
-        entity_x += entity->velocity.x * tick_interp;
+        entity_x += entity->transform.velocity.x * tick_interp;
 
-    delta_y = {0, entity -> velocity.y * tick_interp};
+    delta_y = {0, entity -> transform.velocity.y * tick_interp};
     if(entity_collision(entity, delta_y) == delta_y)
-        entity_y += entity->velocity.y * tick_interp;
+        entity_y += entity->transform.velocity.y * tick_interp;
 
 
     //Get texture for current state
@@ -245,6 +245,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
 
+
     glBegin(GL_QUADS);{
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y);                                 glVertex2d((entity_x * scl),                 (entity_y * scl));
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * !inv_x),    texture_uv_y);                                 glVertex2d((entity_x * scl) + (16 * scl),    (entity_y * scl));
@@ -252,6 +253,8 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y + atlas_texture -> atlas_uvs.y);  glVertex2d((entity_x * scl),                 (entity_y * scl) + (16 * scl));
     }
     glEnd();
+
+
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
 
@@ -417,8 +420,8 @@ Coord2d rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d coord){
     Coord2d position;
 
     int world_win_scl = g_video_mode.world_scale * g_video_mode.window_scale;
-    position.x = (coord.x / world_win_scl) + (viewport_e -> position.x + (viewport_e -> camera.position.x) - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale)));
-    position.y = (coord.y / world_win_scl) + (viewport_e -> position.y + (viewport_e -> camera.position.y) - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale)));
+    position.x = (coord.x / world_win_scl) + (viewport_e -> transform.position.x + (viewport_e -> camera.position.x) - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale)));
+    position.y = (coord.y / world_win_scl) + (viewport_e -> transform.position.y + (viewport_e -> camera.position.y) - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale)));
 
     return position;
 }
