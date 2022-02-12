@@ -5,6 +5,7 @@
  */
 
 #include "geode.h"
+#include <math.h>
 
 Video_Mode g_video_mode;
 Font* g_def_font;
@@ -18,7 +19,7 @@ void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position);
 void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position);
 
 
-GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us){
+GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* windowname){
     //Init GLFW
     if(glfwInit() != GLFW_TRUE){
         return nullptr;
@@ -31,7 +32,7 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     GLFWmonitor* mon = glfwGetPrimaryMonitor();
     const GLFWvidmode* mode = glfwGetVideoMode(mon);
 
-    double aspect = (double)mode->width / (double)mode -> height;
+    double aspect = (double)window_x / (double)window_y;
 
     height  = width * (1.0f/ aspect);
 
@@ -45,7 +46,7 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    GLFWwindow* windowptr = glfwCreateWindow(width * scale, height * scale, "Minicraft", nullptr, nullptr);
+    GLFWwindow* windowptr = glfwCreateWindow(width * scale, height * scale, windowname, nullptr, nullptr);
     glfwMakeContextCurrent(windowptr);
     glewInit();
 
@@ -74,6 +75,9 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
 
     int anim_frame = 0;
 
+    if(chunk == nullptr)
+        return;
+
     //Two different textures means chunk must be animated.
     if(chunk -> render_texture[1] != nullptr){
         int anim_tick = g_time -> tick % TIME_TPS;
@@ -84,17 +88,17 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
 
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
-    double viewport_x = viewport_e -> transform.position.x + (viewport_e -> camera.position.x);
-    double viewport_y = viewport_e -> transform.position.y + (viewport_e -> camera.position.y);
+    double viewport_x = viewport_e -> position.x + (viewport_e -> camera.position.x);
+    double viewport_y = viewport_e -> position.y + (viewport_e -> camera.position.y);
 
-    Coord2d delta_x = {viewport_e -> transform.velocity.x * tick_interp, 0};
+    Coord2d delta_x = {viewport_e -> velocity.x * tick_interp, 0};
 
     if(entity_collision(viewport_e, delta_x) == delta_x)
-        viewport_x += viewport_e->transform.velocity.x * tick_interp;
+        viewport_x += viewport_e->velocity.x * tick_interp;
 
-    Coord2d delta_y = {0, viewport_e -> transform.velocity.y * tick_interp};
+    Coord2d delta_y = {0, viewport_e -> velocity.y * tick_interp};
     if(entity_collision(viewport_e, delta_y) == delta_y)
-        viewport_y += viewport_e->transform.velocity.y * tick_interp;
+        viewport_y += viewport_e->velocity.y * tick_interp;
 
     if(chunk == nullptr)
         return;
@@ -109,7 +113,7 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
         return;
 
     if(chunk -> render_texture[anim_frame] == nullptr)
-        world_chunk_refresh_metatextures(chunk);
+        world_chunk_refresh_metatextures(viewport_e->map, chunk);
 
     texture_bind(chunk -> render_texture[anim_frame], 0);
 
@@ -128,7 +132,7 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
         uint tile_scl = 16 * g_video_mode.world_scale;
         for(uint x = 0; x < 16; ++x) {
             for(uint y = 0; y < 16; ++y) {
-                if (g_block_registry[chunk->background_tiles[(y * 16) + x]]->options & TILE_SOLID || g_block_registry[chunk->overlay_tiles[(y * 16) + x]]->options & TILE_SOLID ) {
+                if (viewport_e -> map->tile_properties[chunk->background_tiles[(y * 16) + x]].options & TILE_SOLID || viewport_e -> map->tile_properties[chunk->overlay_tiles[(y * 16) + x]].options & TILE_SOLID ) {
                     glColor1c(COLOR_RED);
                     glLineWidth(2);
                     glBegin(GL_LINES);
@@ -176,29 +180,29 @@ void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c){
 void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e){
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
-    double viewport_x = (viewport_e -> transform.position.x + (viewport_e -> camera.position.x));
-    double viewport_y = (viewport_e -> transform.position.y + (viewport_e -> camera.position.y));
+    double viewport_x = (viewport_e -> position.x + (viewport_e -> camera.position.x));
+    double viewport_y = (viewport_e -> position.y + (viewport_e -> camera.position.y));
 
-    Coord2d delta_x = {viewport_e -> transform.velocity.x * tick_interp, 0};
+    Coord2d delta_x = {viewport_e -> velocity.x * tick_interp, 0};
     if(entity_collision(viewport_e, delta_x) == delta_x)
-        viewport_x += viewport_e->transform.velocity.x * tick_interp;
+        viewport_x += viewport_e->velocity.x * tick_interp;
 
-    Coord2d delta_y = {0, viewport_e -> transform.velocity.y * tick_interp};
+    Coord2d delta_y = {0, viewport_e -> velocity.y * tick_interp};
     if(entity_collision(viewport_e, delta_y) == delta_y)
-        viewport_y += viewport_e->transform.velocity.y * tick_interp;
+        viewport_y += viewport_e->velocity.y * tick_interp;
 
     double scl = g_video_mode.world_scale;
-    double entity_x = entity -> transform.position.x - (viewport_x - (g_video_mode.window_resolution.x / (2 * scl)));
-    double entity_y = entity -> transform.position.y - (viewport_y - (g_video_mode.window_resolution.y / (2 * scl)));
+    double entity_x = entity -> position.x - (viewport_x - (g_video_mode.window_resolution.x / (2 * scl)));
+    double entity_y = entity -> position.y - (viewport_y - (g_video_mode.window_resolution.y / (2 * scl)));
 
 
-    delta_x = {entity -> transform.velocity.x * tick_interp, 0};
+    delta_x = {entity -> velocity.x * tick_interp, 0};
     if(entity_collision(entity, delta_x) == delta_x)
-        entity_x += entity->transform.velocity.x * tick_interp;
+        entity_x += entity->velocity.x * tick_interp;
 
-    delta_y = {0, entity -> transform.velocity.y * tick_interp};
+    delta_y = {0, entity -> velocity.y * tick_interp};
     if(entity_collision(entity, delta_y) == delta_y)
-        entity_y += entity->transform.velocity.y * tick_interp;
+        entity_y += entity->velocity.y * tick_interp;
 
 
     //Get texture for current state
@@ -242,9 +246,13 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     double texture_uv_y = atlas_texture -> atlas_uvs.y * texture_coord_y;
     
     texture_bind(atlas_texture, 0);
+
+
+    double origin_offset_x = entity -> position.x - viewport_x;
+    double origin_offset_y = entity -> position.y - viewport_y;
+
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
-
 
     glBegin(GL_QUADS);{
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y);                                 glVertex2d((entity_x * scl),                 (entity_y * scl));
@@ -253,8 +261,8 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
         glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y + atlas_texture -> atlas_uvs.y);  glVertex2d((entity_x * scl),                 (entity_y * scl) + (16 * scl));
     }
     glEnd();
-
-
+    
+    glPopMatrix();
     glDisable(GL_TEXTURE_2D);
     glDisable(GL_BLEND);
 
@@ -420,8 +428,8 @@ Coord2d rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d coord){
     Coord2d position;
 
     int world_win_scl = g_video_mode.world_scale * g_video_mode.window_scale;
-    position.x = (coord.x / world_win_scl) + (viewport_e -> transform.position.x + (viewport_e -> camera.position.x) - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale)));
-    position.y = (coord.y / world_win_scl) + (viewport_e -> transform.position.y + (viewport_e -> camera.position.y) - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale)));
+    position.x = (coord.x / world_win_scl) + (viewport_e -> position.x + (viewport_e -> camera.position.x) - (g_video_mode.window_resolution.x / (2 * g_video_mode.world_scale)));
+    position.y = (coord.y / world_win_scl) + (viewport_e -> position.y + (viewport_e -> camera.position.y) - (g_video_mode.window_resolution.y / (2 * g_video_mode.world_scale)));
 
     return position;
 }
@@ -499,10 +507,12 @@ void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position){
             glVertex2i(x1, y2);
         }
         glEnd();
+
     }
 
     glColor1c({255, 255, 255});
     rendering_draw_text(p -> text, 1, p -> font, p -> p.foreground_color, Coord2d{(double)x1, (double)y1});
+
 }
 
 void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position){

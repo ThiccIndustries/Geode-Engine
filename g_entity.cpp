@@ -58,10 +58,10 @@ void entity_move(Entity* entity, Coord2d delta, bool respect_collisions){
     if(respect_collisions)
         new_delta = entity_collision(entity, delta);
 
-    Coord2d new_ent_pos = {entity -> transform.position.x + new_delta.x,
-                           entity -> transform.position.y + new_delta.y};
+    Coord2d new_ent_pos = {entity -> position.x + new_delta.x,
+                           entity -> position.y + new_delta.y};
 
-    entity -> transform.position = new_ent_pos;
+    entity -> position = new_ent_pos;
     entity -> move_state = ENT_STATE_MOVING;
 
     if(delta.x > 0)
@@ -86,7 +86,7 @@ void entity_tick(){
             continue;
 
         e -> move_state = ENT_STATE_STATIONARY;
-        entity_move(e, e->transform.velocity, true);
+        entity_move(e, e->velocity, true);
 
         //Tick entity
         e -> tick_func(e);
@@ -98,15 +98,15 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
 
     //   << delta.x << " " << delta.y << std::endl;
 
-    Coord2d new_ent_pos = entity -> transform.position + delta;
+    Coord2d new_ent_pos = entity -> position + delta;
 
     //Global coordinates of bounding box, with new desired position
     BoundingBox global_bb = { {entity->col_bounds.p1.x + new_ent_pos.x, entity->col_bounds.p1.y + new_ent_pos.y},
                               {entity->col_bounds.p2.x + new_ent_pos.x, entity->col_bounds.p2.y + new_ent_pos.y} };
 
     Coord2i chunk;
-    Coord2i tile{ (int)(entity->transform.position.x / 16),
-                  (int)(entity->transform.position.y  / 16) };
+    Coord2i tile{ (int)(entity->position.x / 16),
+                  (int)(entity->position.y  / 16) };
 
     Chunk* chunkptr;
     Coord2i rel_tile;
@@ -126,8 +126,9 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
                 continue;
 
             //Tile is not solid, no need to check AABBa
-            if(!((g_block_registry[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)
-             || (g_block_registry[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)))
+            uint index = chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ];
+            if(!((entity -> map->tile_properties[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)
+             || (entity -> map->tile_properties[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)))
                 continue;
 
             BoundingBox tile_bb = { {(rel_tile.x * 16.0) + (chunk.x * 256.0)      , (rel_tile.y * 16.0) + (chunk.y * 256.0)},
@@ -170,8 +171,8 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
             continue;
 
         BoundingBox ent_g_bb = {
-                {checking_ent->col_bounds.p1.x + checking_ent->transform.position.x, checking_ent->col_bounds.p1.y + checking_ent->transform.position.y},
-                {checking_ent->col_bounds.p2.x + checking_ent->transform.position.x, checking_ent->col_bounds.p2.y + checking_ent->transform.position.y},
+                {checking_ent->col_bounds.p1.x + checking_ent->position.x, checking_ent->col_bounds.p1.y + checking_ent->position.y},
+                {checking_ent->col_bounds.p2.x + checking_ent->position.x, checking_ent->col_bounds.p2.y + checking_ent->position.y},
         };
 
         if(entity_AABB(ent_g_bb, global_bb)){
@@ -202,7 +203,7 @@ Entity* entity_hit(Entity* entity, Coord2d delta){
 
     //   << delta.x << " " << delta.y << std::endl;
 
-    Coord2d new_ent_pos = entity -> transform.position + delta;
+    Coord2d new_ent_pos = entity -> position + delta;
 
     //Global coordinates of bounding box, with new desired position
     BoundingBox global_bb = { {entity->hit_bounds.p1.x + new_ent_pos.x, entity->hit_bounds.p1.y + new_ent_pos.y},
@@ -221,8 +222,8 @@ Entity* entity_hit(Entity* entity, Coord2d delta){
             continue;
 
         BoundingBox ent_g_bb = {
-                {checking_ent->hit_bounds.p1.x + checking_ent->transform.position.x, checking_ent->hit_bounds.p1.y + checking_ent->transform.position.y},
-                {checking_ent->hit_bounds.p2.x + checking_ent->transform.position.x, checking_ent->hit_bounds.p2.y + checking_ent->transform.position.y},
+                {checking_ent->hit_bounds.p1.x + checking_ent->position.x, checking_ent->hit_bounds.p1.y + checking_ent->position.y},
+                {checking_ent->hit_bounds.p2.x + checking_ent->position.x, checking_ent->hit_bounds.p2.y + checking_ent->position.y},
         };
 
         if(entity_AABB(ent_g_bb, global_bb))

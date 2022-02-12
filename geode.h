@@ -37,7 +37,7 @@
 
 #define STORAGE_SIZE 96
 
-#define TIME_TPS 32
+#define TIME_TPS 64
 
 /*--- Enums and structs ---*/
 
@@ -140,17 +140,28 @@ typedef struct BoundingBox{
     Coord2d p2; //Upper Right coordinate
 } BoundingBox;
 
-typedef struct Transform{
-    Coord2d position = {0, 0};
-    Coord2d velocity = {0, 0};
-    double rotation = 0.0;
-} Transform;
+
+//World chunk
+typedef struct Chunk{
+    Coord2i pos{};                  //Chunk coordinates
+    uchar overlay_tiles[256]{};     //Base tiles
+    uchar background_tiles[256]{};  //Overlay tiles
+    Texture* render_texture[4] = {nullptr}; //Render textures
+} Chunk;
+
+typedef struct Map{
+    uint id;
+    Texture* tilemap;
+    uint tile_count;
+    Block* tile_properties;
+}Map;
 
 //All Entity types must contain an Entity member 'e' as their first member
 typedef struct Entity{
     uint        id;                         //id of the entity in g_entity_registry
-    Transform    transform;                 //transform of the Entity, this is updated every tick based on its velocity and collisions
-
+    Coord2d     position;
+    Coord2d     velocity;
+    Map*        map;
     uint        atlas_index;                //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
     Coord2i     spritesheet_size;           //Size of the sprite sheet { directions, frames }
     uint        frame_count;                //Number of animation frames
@@ -166,14 +177,6 @@ typedef struct Entity{
     void        (*tick_func)(Entity* e);    //Function executed on tick
     void        (*death_func)(Entity* e);   //Function executed on death
 } Entity;
-
-//World chunk
-typedef struct Chunk{
-    Coord2i pos{};                  //Chunk coordinates
-    uchar overlay_tiles[256]{};     //Base tiles
-    uchar background_tiles[256]{};  //Overlay tiles
-    Texture* render_texture[4] = {nullptr}; //Render textures
-} Chunk;
 
 typedef struct Time{
     long   tick = 0;            //The number of game ticks
@@ -209,11 +212,11 @@ typedef struct Panel{
     uint    type = PANEL_EMPTY;
     
     /* Dynamic panels only */
-    bool    dynamic = false;                        //Dynamic panel or static panel
-    bool    active = false;                         //Dynamic panel active or not
-    uint    id;                                     //Dynamic panels only
-    void*   packet;                                 //Dynamic panel packet
-    void    (*tick_func)(Panel* p, void* packet);   //Dynamic panel tick func.
+    bool    dynamic = false;                                    //Dynamic panel or static panel
+    bool    active = false;                                     //Dynamic panel active or not
+    uint    id;                                                 //Dynamic panels only
+    void*   packet;                                             //Dynamic panel packet
+    void    (*tick_func)(Panel* p, void* packet) = nullptr;     //Dynamic panel tick func.
 } Panel;
 
 typedef struct Panel_Text{
@@ -262,7 +265,6 @@ extern Time* g_time;        //Global time object
 
 //minicraft_world.cpp
 extern Chunk* g_chunk_buffer[];    //Contains loaded chunks
-extern Block* g_block_registry[];  //Contains all Block types
 
 //minicraft_entity.cpp
 extern Entity*  g_entity_registry[]; //All active entities
@@ -290,21 +292,23 @@ void        texture_destroy(Texture* t);                                        
 
 //minicraft_world.cpp
 void world_set_chunk_callbacks(
-        Chunk*      (*load_callback)(Coord2i coord),
-        void        (*unload_callback)(Chunk* chunk),
-        Texture*    (*texture_callback)(Chunk* chunk)
+        Chunk*      (*load_callback)(Map* map, Coord2i coord),
+        void        (*unload_callback)(Map* map, Chunk* chunk)
 );  //Set callbacks for world loading
 
 void    world_populate_chunk_buffer(Entity* viewport_e);                //Populate Chunk Buffer
 Chunk*  world_get_chunk(Coord2i ccoord);                                //Find a chunk in g_chunk_buffer
+Map*    world_map_read(uint id);
+void    world_map_write(Map* map);
 void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set tile of chunk to value
-Chunk*  world_chunkfile_read(const std::string& path, Coord2i ccoord);  //read chunk from file
-void    world_chunkfile_write(const std::string& path, Chunk* chunk);   //write chunk to chunkfile
-void    world_chunk_refresh_metatextures(Chunk* chunk);                  //Refresh chunk rendering metatexture
-std::map<Coord2i, Coord2i> world_get_local_coordinates(Coord2i gcoord); //Get chunk and tile from global tile coordinate
+Chunk*  world_chunkfile_read(Map* map, Coord2i ccoord);  //read chunk from file
+void    world_chunkfile_write(Map* map, Chunk* chunk);   //write chunk to chunkfile
+void    world_chunk_refresh_metatextures(Map* map, Chunk* chunk);                  //Refresh chunk rendering metatexture
+void    write_map_resource(Map* map, const std::string& filename, void* data, size_t size);
+void    read_map_resource(Map* map, const std::string& filename, void* out, size_t size);
 
 //minicraft_rendering.cpp
-GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us);                 //Init OpenGL, GLFW, and create window
+GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* title);                 //Init OpenGL, GLFW, and create window
 void        rendering_draw_chunk(Chunk* chunk, Entity* viewport_e);
 void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);              //Draw an entity
 void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);           //Draw all entities in g_entity_registry
@@ -409,6 +413,7 @@ inline uint clampui(uint a, uint min, uint max){
 inline double distancec2d(Coord2d a, Coord2d b){
     return sqrt( std::pow((b.x - a.x), 2) +  std::pow((b.y - a.y), 2));
 }
+
 
 inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
     uint substri = executable_path.find_last_of('/');

@@ -138,7 +138,7 @@ Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, ui
     struct Packet{
         std::string prefix;
         int* val;
-        uint last_update;
+        long last_update;
         uint update_interval;
     };
 

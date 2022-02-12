@@ -60,6 +60,7 @@ Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, u
 
     //Open file
     FILE* file = fopen(path.c_str(), "rb");
+
     if(!file){
         error("Texture not found.", "Texture file: " + path + " could not be opened.");
         return nullptr;
