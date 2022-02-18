@@ -28,7 +28,7 @@ Texture* texture_generate(Image* img, uchar texture_load_options, uint tile_size
     }
 
     if(texture_load_options & TEXTURE_STORE){
-        textureptr -> imageData = img -> imageData;
+        textureptr -> image = img;
     }
 
     //Upload image data to openGL

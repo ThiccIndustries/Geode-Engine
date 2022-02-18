@@ -72,6 +72,7 @@ void ui_tick(){
 
         for(uint j = 0; j < g_dynamic_panel_registry[i] -> child_count; ++j){
             if(g_dynamic_panel_registry[i] -> children[j] -> dynamic){
+                Panel* test = g_dynamic_panel_registry[i] -> children[j];
                 g_dynamic_panel_registry[i] -> children[j] -> tick_func(g_dynamic_panel_registry[i] -> children[j], g_dynamic_panel_registry[i] -> children[j] -> packet);
             }
         }
@@ -84,8 +85,17 @@ void ui_button_tick(Panel* p, void* v){
     pos.x = pos.x / (g_video_mode.window_scale);
     pos.y = pos.y / (g_video_mode.window_scale);
 
-    if( (pos.x >= p -> position.x && pos.x <= p -> position.x + p -> size.x)
-    &&  (pos.y >= p -> position.y && pos.y <= p -> position.y + p -> size.y)
+    Coord2i ppos = p -> position;
+
+    //Recurses up the parentage
+    Panel* parent = p -> parent;
+    while(parent != nullptr){
+        ppos = ppos + parent->position;
+        parent = parent -> parent;
+    }
+
+    if( (pos.x >= ppos.x && pos.x <= ppos.x + p -> size.x)
+    &&  (pos.y >= ppos.y && pos.y <= ppos.y + p -> size.y)
     &&  input_get_button_down_tick(GLFW_MOUSE_BUTTON_1)){
         
         pb -> click_func(pb -> packet);
@@ -148,7 +158,6 @@ Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, ui
     t -> p.packet = p;
     t -> p.tick_func =[](Panel* p, void* v){
         Packet* pac = (Packet*)v;
-
         if(g_time -> tick - pac -> last_update < pac -> update_interval)
             return;
 

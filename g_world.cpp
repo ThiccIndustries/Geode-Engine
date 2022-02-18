@@ -216,7 +216,7 @@ void world_chunk_refresh_metatextures(Map* map, Chunk* chunk){
         return;
     }
 
-    if(terrain_t -> imageData == nullptr){
+    if(terrain_t -> image == nullptr){
         error("Rndr txtr not TEXTURE_STORE.", "Render texture recieved for Chunk {" + std::to_string(chunk->pos.x) + ", " + std::to_string(chunk->pos.y) + "} did not have TEXTURE_STORE set.");
     }
 
@@ -311,7 +311,7 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
 
             uint render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( (((tile_y + anim_index) * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
 
-            memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> imageData[render_pixel]), 4);
+            memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> image -> imageData[render_pixel]), 4);
 
             /* Overlay tiles */
 
@@ -337,10 +337,10 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
                 anim_index = anim_frame * (overlays[ctile_i] ? 1 : 0);
 
             render_pixel = (((tile_x * terrain_t->tile_size) + pixel_x) * 4) + ( (((tile_y + anim_index) * terrain_t->tile_size) + pixel_y) * terrain_t->width * 4);
-            if(terrain_t -> imageData[render_pixel + 3] == 0)
+            if(terrain_t -> image -> imageData[render_pixel + 3] == 0)
                 continue;
 
-            memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> imageData[render_pixel]), 3);
+            memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> image -> imageData[render_pixel]), 3);
         }
     }
 }

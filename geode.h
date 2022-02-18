@@ -32,6 +32,7 @@
 #define TILE_TEX_FLIP_X  0b00000010   //Tile should be rendered with texture flipped across X axis
 #define TILE_TEX_FLIP_Y  0b00000100   //Tile should be rendered with texture flipped across Y axis
 #define TILE_ANIMATED    0b00001000   //Animated tile
+
 #define TILE_LAST TILE_ANIMATED
 #define ENTITY_MAX 0xFFFF
 
@@ -104,6 +105,13 @@ typedef struct Camera{
     Coord2d position;
 } Camera;
 
+//Raw image data loaded from a BMP image
+typedef struct Image{
+    uint width;     //Size of image in pixels
+    uint height;    //----------------------
+  uchar* imageData; //Raw image data in RGB bmp format
+} Image;
+
 //OpenGL texture id with dimensions and texture uv information
 typedef struct Texture{
     GLuint id;                  //OpenGL texture id
@@ -111,20 +119,13 @@ typedef struct Texture{
     uint height;                //------------------------
     uint tile_size;             //Size of tiles
     Coord2d atlas_uvs;          //Difference in UV coordinates per texture
-    uchar* imageData = nullptr; //Only used if TEXTURE_STORE is enabled on generation
+    Image* image;           //Only used if TEXTURE_STORE is enabled on generation
 } Texture;
 
 typedef struct Font{
     Texture* t;
     std::string font_atlas;
 } Font;
-
-//Raw image data loaded from a BMP image
-typedef struct Image{
-    uint width;     //Size of image in pixels
-    uint height;    //----------------------
-  uchar* imageData; //Raw image data in RGB bmp format
-} Image;
 
 //World tile
 typedef struct Block{
@@ -207,6 +208,7 @@ typedef struct Panel{
     Color   foreground_color;
     Color   background_color;
     bool    has_background;
+    Panel*  parent = nullptr;
     Panel** children;
     uint    child_count = 0;
     uint    type = PANEL_EMPTY;
@@ -367,9 +369,56 @@ void ui_tick();
 void ui_dynamic_panel_activate(Panel* dp);
 void ui_dynamic_panel_deactivate(Panel* dp);
 
-//UI Constructors
+//UI Constructors TODO: Move to separate UI Extensions header
 Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value);
 Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval);
+
+template <typename T>
+Panel* ui_create_checkbox(int size, Color fg, Color bg, T* out, T sel, T dsel){
+    size *= 4;
+    Panel_Button* button = new Panel_Button();
+
+    Panel* box = new Panel();
+    Panel* indicator = new Panel();
+
+
+    button -> p.child_count = 2;
+    button -> p.children = new Panel*[button -> p.child_count]{box, indicator};
+
+    box -> type = PANEL_BOX;
+    box -> size = {size, size};
+    box -> background_color = bg;
+    box -> foreground_color = fg;
+    box -> has_background = true;
+
+    indicator -> type = PANEL_BOX;
+    indicator -> position = {size / 4, size / 4};
+    indicator -> size = {size / 2, size / 2};
+    indicator -> foreground_color = *out == sel ? bg : fg;
+    indicator -> has_background = false;
+
+    typedef struct Packet{
+        Color fg;
+        Color bg;
+        Panel* indicator;
+        T* out;
+        T sel;
+        T dsel;
+    } Packet;
+
+    Packet *p = new Packet{fg, bg, indicator, out, sel, dsel};
+
+    button -> p.position = {0, 0};
+    button -> p.size = {size, size};
+    button -> packet = p;
+    button -> click_func = [](void* v){
+        Packet* p = (Packet*)v;
+        *p -> out = *p -> out == p -> sel ? p -> dsel : p -> sel;
+        p -> indicator -> foreground_color = *(p -> out) == p -> sel ? p -> bg : p -> fg;
+    };
+
+    return (Panel*)button;
+}
 
 /*---inline util functions---*/
 

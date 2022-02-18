@@ -434,10 +434,9 @@ Coord2d rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d coord){
     return position;
 }
 
-void rendering_draw_panel(Panel* p){ 
-
+void rendering_draw_panel(Panel* p){
     rendering_draw_panel(p, {0, 0}); 
-    }
+}
 
 void rendering_draw_panel(Panel* p, Coord2i parent_position){
     
@@ -456,8 +455,7 @@ void rendering_draw_panel(Panel* p, Coord2i parent_position){
     //Draw all children
 
     for(uint i = 0; i < p -> child_count; ++i){
-
-        rendering_draw_panel(p -> children[i], p -> position);
+        rendering_draw_panel(p -> children[i], parent_position + p -> position);
     }
 }
 
@@ -523,21 +521,16 @@ void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position){
     int x2 = x1 + p -> texture -> tile_size;
     int y2 = y1 + p -> texture -> tile_size;
 
-    /*if(p -> p.has_background){
-        glColor1c(p -> p.background_color);
-        glBegin(GL_QUADS);{
-            glVertex2i(x1, y1);
-            glVertex2i(x2, y1);
-            glVertex2i(x2, y2);
-            glVertex2i(x1, y2);
-        }
-        glEnd();
-    }*/
-
     texture_bind(p -> texture, 0);
 
-    double uv_x = (p -> atlas_index % (p -> texture -> width / p -> texture -> tile_size)) * p -> texture -> atlas_uvs.x;
-    double uv_y = (p -> atlas_index / (p -> texture -> height / p -> texture -> tile_size)) * p -> texture -> atlas_uvs.y;
+    uint tiles_x = p->texture->width / p->texture->tile_size;
+    uint tiles_y = p->texture->height / p->texture->tile_size;
+
+    uint tile_px = p -> atlas_index % tiles_x;
+    uint tile_py = p -> atlas_index / tiles_y;
+
+    double uv_x = tile_px * p -> texture -> atlas_uvs.x;
+    double uv_y = tile_py * p -> texture -> atlas_uvs.y;
 
     glEnable(GL_TEXTURE_2D);
     glEnable(GL_BLEND);
