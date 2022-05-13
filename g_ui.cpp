@@ -67,15 +67,18 @@ void ui_tick(){
         if(g_dynamic_panel_registry[i] == nullptr)
             continue;
 
-        if(g_dynamic_panel_registry[i] -> tick_func != nullptr)
-            g_dynamic_panel_registry[i] -> tick_func(g_dynamic_panel_registry[i], g_dynamic_panel_registry[i] -> packet);
+        int child = g_dynamic_panel_registry[i] -> child_count;
+        for(uint j = 0; j < child; ++j){
+            if(g_dynamic_panel_registry[i] == nullptr)
+                break;
 
-        for(uint j = 0; j < g_dynamic_panel_registry[i] -> child_count; ++j){
             if(g_dynamic_panel_registry[i] -> children[j] -> dynamic){
-                Panel* test = g_dynamic_panel_registry[i] -> children[j];
                 g_dynamic_panel_registry[i] -> children[j] -> tick_func(g_dynamic_panel_registry[i] -> children[j], g_dynamic_panel_registry[i] -> children[j] -> packet);
             }
         }
+
+        if(g_dynamic_panel_registry[i] != nullptr && g_dynamic_panel_registry[i] -> tick_func != nullptr)
+            g_dynamic_panel_registry[i] -> tick_func(g_dynamic_panel_registry[i], g_dynamic_panel_registry[i] -> packet);
     }
 }
 
@@ -85,14 +88,7 @@ void ui_button_tick(Panel* p, void* v){
     pos.x = pos.x / (g_video_mode.window_scale);
     pos.y = pos.y / (g_video_mode.window_scale);
 
-    Coord2i ppos = p -> position;
-
-    //Recurses up the parentage
-    Panel* parent = p -> parent;
-    while(parent != nullptr){
-        ppos = ppos + parent->position;
-        parent = parent -> parent;
-    }
+    Coord2i ppos = ui_panel_global_position(p);
 
     if( (pos.x >= ppos.x && pos.x <= ppos.x + p -> size.x)
     &&  (pos.y >= ppos.y && pos.y <= ppos.y + p -> size.y)
@@ -102,6 +98,17 @@ void ui_button_tick(Panel* p, void* v){
     }
 }
 
+Coord2i ui_panel_global_position(Panel* p){
+    Coord2i ppos = p -> position;
+
+    //Recurses up the parentage
+    Panel* parent = p -> parent;
+    while(parent != nullptr){
+        ppos = ppos + parent->position;
+        parent = parent -> parent;
+    }
+    return ppos;
+}
 /* UI Extensions */
 Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value){
     Panel* bar = new Panel();
@@ -137,7 +144,6 @@ Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, 
 
     return bar;
 }
-
 Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval){
     Panel_Text* t = new Panel_Text;
     

@@ -128,6 +128,7 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
             //Tile is not solid, no need to check AABBa
             uint index = chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ];
             if(!((entity -> map->tile_properties[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)
+             || (chunkptr -> background_tiles[rel_tile.x + (rel_tile.y * 16) ] == 0)
              || (entity -> map->tile_properties[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)))
                 continue;
 

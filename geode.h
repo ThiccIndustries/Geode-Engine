@@ -40,6 +40,7 @@
 
 #define TIME_TPS 64
 
+#define VOID_TILE {0, 0, 0, 0 }
 /*--- Enums and structs ---*/
 
 enum EntityState{
@@ -56,6 +57,28 @@ enum MovementDirection{
 
 typedef unsigned int  uint;     //Shorthand unsigned int type
 typedef unsigned char uchar;    //Shorthand unsigned char type
+typedef unsigned short ushort;  //Shorthand unsigned short type
+typedef struct Option{
+    bool value;
+    bool previous;
+
+    Option(const bool& value){
+        this -> value = value;
+        this -> previous = value;
+    }
+
+    Option& operator=(const bool& value){
+        this -> value = value;
+        return *this;
+    }
+
+    bool operator==(const bool& value) const{
+        return this->value == value;
+    }
+
+    operator bool() { return this -> value; }
+
+}Option;
 
 //2D double coordinate
 typedef struct Coord2d{
@@ -119,7 +142,7 @@ typedef struct Texture{
     uint height;                //------------------------
     uint tile_size;             //Size of tiles
     Coord2d atlas_uvs;          //Difference in UV coordinates per texture
-    Image* image;           //Only used if TEXTURE_STORE is enabled on generation
+    Image* image;               //Only used if TEXTURE_STORE is enabled on generation
 } Texture;
 
 typedef struct Font{
@@ -131,8 +154,8 @@ typedef struct Font{
 typedef struct Block{
     uint atlas_index;   //Index of texture
     uchar options;      //Tile bitflags
-    uint drop_id;       //ID of resource to drop
-    uint drop_count;    //drop count
+    ushort packet1;     //ID of resource to drop
+    ushort packet2;     //drop count
 }Block;
 
 //Simple AABB
@@ -234,7 +257,10 @@ typedef struct Panel_Sprite{
     Panel p;
     Texture* texture;
     uint atlas_index;
-    Panel_Sprite(){ p.type = PANEL_SPRITE; };
+    Panel_Sprite(){
+        p.has_background = true;
+        p.type = PANEL_SPRITE;
+    };
 
 } Panel_Sprite;
 
@@ -267,6 +293,7 @@ extern Time* g_time;        //Global time object
 
 //minicraft_world.cpp
 extern Chunk* g_chunk_buffer[];    //Contains loaded chunks
+extern Option g_overlays;
 
 //minicraft_entity.cpp
 extern Entity*  g_entity_registry[]; //All active entities
@@ -274,7 +301,7 @@ extern uint     g_entity_highest_id; //The highest entity ID active in g_entity_
 
 //minicraft_main.cpp
 extern std::string g_game_path; //Global reference to argv[0]
-extern bool g_debug;
+extern Option g_debug;
 
 //minicraft_rendering.cpp
 extern Video_Mode g_video_mode;
@@ -310,18 +337,18 @@ void    write_map_resource(Map* map, const std::string& filename, void* data, si
 void    read_map_resource(Map* map, const std::string& filename, void* out, size_t size);
 
 //minicraft_rendering.cpp
-GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* title);                 //Init OpenGL, GLFW, and create window
+GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* title, bool free_aspect);    //Init OpenGL, GLFW, and create window
 void        rendering_draw_chunk(Chunk* chunk, Entity* viewport_e);
-void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);              //Draw an entity
-void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);           //Draw all entities in g_entity_registry
+void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);                                      //Draw an entity
+void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);                                                    //Draw all entities in g_entity_registry
 void        rendering_draw_chunk_buffer(Entity* viewport_e);
-void        rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2d pos);  //Draw text
+void        rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2d pos);                          //Draw text
 void        rendering_draw_bar(uint value, Coord2i position, Texture* ui_texture, uint atlas_index);
 void        rendering_draw_cursor(Texture* ui_texture, uint atlas_index);
-void        rendering_draw_dialog(const std::string& title, const std::string& message, Font* font);        //Draw a dialog
+void        rendering_draw_dialog(const std::string& title, const std::string& message, Font* font);                                //Draw a dialog
 void        rendering_draw_panel(Panel* panel);
-Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                               //Get world position of viewport position
-void        rendering_update_chunk_texture(Chunk* c);                                                       //Update chunk texture
+Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                                                       //Get world position of viewport position
+void        rendering_update_chunk_texture(Chunk* c);                                                                               //Update chunk texture
 
 //minicraft_input.cpp
 void input_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);   //Keyboard callback
@@ -363,15 +390,18 @@ Coord2d entity_collision(Entity* entity, Coord2d delta);                        
 Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
 void    entity_damage(Entity* entity, uint damage);
+Entity* entity_create_from_type(uint e);                                        //Defined by game
 
 //g_ui.cpp
 void ui_tick();
 void ui_dynamic_panel_activate(Panel* dp);
 void ui_dynamic_panel_deactivate(Panel* dp);
+Coord2i ui_panel_global_position(Panel* p);
 
 //UI Constructors TODO: Move to separate UI Extensions header
 Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value);
 Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval);
+void ui_refresh_checkbox(Panel* checkbox);
 
 template <typename T>
 Panel* ui_create_checkbox(int size, Color fg, Color bg, T* out, T sel, T dsel){
@@ -420,11 +450,37 @@ Panel* ui_create_checkbox(int size, Color fg, Color bg, T* out, T sel, T dsel){
     return (Panel*)button;
 }
 
+template <typename T>
+
+void ui_refresh_checkbox(Panel* checkbox){
+    Panel_Button* cb = (Panel_Button*)checkbox;
+    typedef struct Packet{
+        Color fg;
+        Color bg;
+        Panel* indicator;
+        T* out;
+        T sel;
+        T dsel;
+    } Packet;
+
+    Packet* p = (Packet*)cb -> packet;
+    p -> indicator -> foreground_color = *(p -> out) == p -> sel ? p -> bg : p -> fg;
+}
+
 /*---inline util functions---*/
 
 //Fake GL function to use Color instead of 3ub
 inline void glColor1c(const Color& c){
     glColor3ub(c.r, c.g, c.b);
+}
+
+inline bool option_changed(Option* o){
+    if(o -> previous != o -> value){
+        o -> previous = o -> value;
+        return true;
+    }
+
+    return false;
 }
 
 //Exit the game with an error message

@@ -19,40 +19,43 @@ void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position);
 void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position);
 
 
-GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* windowname){
+GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* windowname, bool free_aspect){
     //Init GLFW
     if(glfwInit() != GLFW_TRUE){
         return nullptr;
     }
 
-    //Auto calc window res and scale
-    uint width = window_x;
-    uint height;
 
-    GLFWmonitor* mon = glfwGetPrimaryMonitor();
-    const GLFWvidmode* mode = glfwGetVideoMode(mon);
+    int mon_count;
+    GLFWmonitor** mons = glfwGetMonitors(&mon_count);
+    const GLFWvidmode* mode = glfwGetVideoMode(mons[1]);
 
-    double aspect = (double)window_x / (double)window_y;
+    double mon_aspect = (double)mode->height / (double)mode -> width;
 
-    height  = width * (1.0f/ aspect);
-
-    int scale1 = mode->width / width;
-    int scale2 = mode->height / height;
+    int scale1 = mode->width / window_x;
+    int scale2 = mode->height / window_y;
 
     int scale = std::max(scale1, scale2);
-    scale -= 2;
+
+    if(free_aspect){
+        window_y = window_x * mon_aspect;
+    }
+
+    //scale = clampi(scale, 1, scale);
 
     //Create window and set context
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 2);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 0);
 
-    GLFWwindow* windowptr = glfwCreateWindow(width * scale, height * scale, windowname, nullptr, nullptr);
+    GLFWwindow* windowptr = glfwCreateWindow(window_x * scale, window_y * scale, windowname, nullptr, nullptr);
+
+
     glfwMakeContextCurrent(windowptr);
     glewInit();
 
     //Set up ortho projection
     glLoadIdentity();
-    glOrtho(0, width, height, 0, 1, -1);
+    glOrtho(0, window_x, window_y, 0, 1, -1);
     glMatrixMode(GL_PROJECTION);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
@@ -61,7 +64,7 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
     glfwSwapInterval(0);
 
     g_video_mode = {
-            {(int)width, (int)height}, //resolution
+            {(int)window_x, (int)window_y}, //resolution
             (uint)scale,    //Window scale
             rs,    //World scale
             us,    //Ui scale
@@ -132,7 +135,7 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
         uint tile_scl = 16 * g_video_mode.world_scale;
         for(uint x = 0; x < 16; ++x) {
             for(uint y = 0; y < 16; ++y) {
-                if (viewport_e -> map->tile_properties[chunk->background_tiles[(y * 16) + x]].options & TILE_SOLID || viewport_e -> map->tile_properties[chunk->overlay_tiles[(y * 16) + x]].options & TILE_SOLID ) {
+                if (viewport_e -> map->tile_properties[chunk->background_tiles[(y * 16) + x]].options & TILE_SOLID || (chunk->overlay_tiles[(y * 16) + x] != 0 && viewport_e -> map->tile_properties[chunk->overlay_tiles[(y * 16) + x]].options & TILE_SOLID )) {
                     glColor1c(COLOR_RED);
                     glLineWidth(2);
                     glBegin(GL_LINES);
@@ -439,7 +442,11 @@ void rendering_draw_panel(Panel* p){
 }
 
 void rendering_draw_panel(Panel* p, Coord2i parent_position){
-    
+
+    if(p == nullptr){
+        return;
+    }
+
     switch (p -> type) {
         case PANEL_BOX:
             rendering_draw_panel_box(p, parent_position);
@@ -533,7 +540,8 @@ void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position){
     double uv_y = tile_py * p -> texture -> atlas_uvs.y;
 
     glEnable(GL_TEXTURE_2D);
-    glEnable(GL_BLEND);
+    if(p -> p.has_background)
+        glEnable(GL_BLEND);
     glBegin(GL_QUADS);{
         glTexCoord2d(uv_x,                                  uv_y);                                  glVertex2i(x1, y1);
         glTexCoord2d(uv_x + p -> texture -> atlas_uvs.x,    uv_y);                                  glVertex2i(x2, y1);
@@ -541,6 +549,7 @@ void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position){
         glTexCoord2d(uv_x,                                  uv_y + p -> texture -> atlas_uvs.y);    glVertex2i(x1, y2);
     }
     glEnd();
-    glDisable(GL_BLEND);
+    if(p -> p.has_background)
+        glDisable(GL_BLEND);
     glDisable(GL_TEXTURE_2D);
 }

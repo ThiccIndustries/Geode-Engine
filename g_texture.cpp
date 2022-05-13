@@ -90,6 +90,7 @@ Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, u
 
     fseek(file, dataPos, SEEK_SET);                      //Move to indexed pixels location
     fread(bgr_array, 3, width * height, file);    //Read pixel information
+    fclose(file);
 
     for(int y = (height - 1); y >= 0; y--){
         for(int x = 0; x < width; x++) {

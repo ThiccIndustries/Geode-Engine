@@ -4,11 +4,14 @@
  * This software is under the: Thicc-Industries-Do-What-You-Want-I-Dont-Care License.
  */
 
+
+/*FINALLY! THE HELL FILE!*/
 #include "geode.h"
 #include <filesystem>
 #include <cstring> //Why is memcpy in here?
 
-Chunk* g_chunk_buffer[9]{nullptr};
+Option g_overlays = true;
+Chunk* g_chunk_buffer[(RENDER_DISTANCE * 2 + 1) * (RENDER_DISTANCE * 2 + 1)]{nullptr};
 Chunk*  (*chunk_load_callback)(Map* map, Coord2i coord);
 void    (*chunk_unload_callback)(Map* map, Chunk* chunk);
 void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrain_t, bool skip, bool tiles[256], bool overlays[256], int anim_index);
@@ -45,7 +48,7 @@ void world_populate_chunk_buffer(Entity* viewport_e){
                 for(int i = 0; i < 2; i++){
                     if(g_chunk_buffer[chunki] -> render_texture[i] != nullptr) {
                         texture_destroy(g_chunk_buffer[chunki]->render_texture[i]);
-                        g_chunk_buffer[chunki] -> render_texture[i] == nullptr;
+                        g_chunk_buffer[chunki] -> render_texture[i] = nullptr;
                     }
                 }
 
@@ -86,8 +89,10 @@ Chunk* world_get_chunk(Coord2i ccoord){
 }
 
 Map* world_map_read(uint id){
-    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(id) + ".map/texture.prp").c_str(), "rb");
-    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(id) + ".map/tiles.prp").c_str(), "rb");
+    std::cout << get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.prp").c_str() << std::endl;
+    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.prp").c_str(), "rb");
+    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/tiles.prp").c_str(), "rb");
+
 
     if(!texture_properties){
         return nullptr;
@@ -106,7 +111,7 @@ Map* world_map_read(uint id){
 
     fclose(texture_properties);
 
-    Texture* map_texture = texture_load_bmp(get_resource_path(g_game_path, "maps/" + std::to_string(id) + ".map/texture.bmp"), TEXTURE_MULTIPLE | TEXTURE_STORE, texture_tilesize);
+    Texture* map_texture = texture_load_bmp(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.bmp"), TEXTURE_MULTIPLE | TEXTURE_STORE, texture_tilesize);
 
     Map* map = new Map;
     map -> id = id;
@@ -114,17 +119,18 @@ Map* world_map_read(uint id){
     map -> tile_count = tile_count;
     map -> tile_properties = new Block[tile_count];
     std::cout << map -> tile_count << std::endl;
-    uint atlas_index, drop_id, drop_count;
+    uint atlas_index;
+    ushort packet1, packet2;
     uchar options;
 
     for(uint i = 0; i < tile_count; ++i){
         fseek(tiles_properties, (0x10 * i) + 0x10, SEEK_SET);
         fread(&atlas_index, sizeof(uint), 1, tiles_properties);
-        fread(&drop_id,     sizeof(uint), 1, tiles_properties);
-        fread(&drop_count,  sizeof(uint), 1, tiles_properties);
+        fread(&packet1,     sizeof(ushort), 1, tiles_properties);
+        fread(&packet2,     sizeof(ushort), 1, tiles_properties);
         fread(&options,     sizeof(uchar), 1, tiles_properties);
 
-        map -> tile_properties[i] = {atlas_index, options, drop_id, drop_count};
+        map -> tile_properties[i] = {atlas_index, options, packet1, packet2};
     }
     fclose(tiles_properties);
 
@@ -132,9 +138,9 @@ Map* world_map_read(uint id){
 }
 
 void world_map_write(Map* map){
-    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/"));
-    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/texture.prp").c_str(), "wb");
-    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/tiles.prp").c_str(), "wb");
+    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/"));
+    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/texture.prp").c_str(), "wb");
+    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/tiles.prp").c_str(), "wb");
     fwrite(&(map -> tilemap -> tile_size), sizeof(uint), 1, texture_properties);
     fclose(texture_properties);
 
@@ -146,8 +152,8 @@ void world_map_write(Map* map){
         std::cout << map -> tile_properties[i].atlas_index << std::endl;
         fseek(tiles_properties, (0x10 * i) + 0x10, SEEK_SET);
         fwrite(&(map -> tile_properties[i].atlas_index),    sizeof(uint), 1, tiles_properties);
-        fwrite(&(map -> tile_properties[i].drop_id),        sizeof(uint), 1, tiles_properties);
-        fwrite(&(map -> tile_properties[i].drop_count),     sizeof(uint), 1, tiles_properties);
+        fwrite(&(map -> tile_properties[i].packet1),        sizeof(ushort), 1, tiles_properties);
+        fwrite(&(map -> tile_properties[i].packet2),        sizeof(ushort), 1, tiles_properties);
         fwrite(&(map -> tile_properties[i].options),        sizeof(uchar), 1, tiles_properties);
     }
     fclose(tiles_properties);
@@ -156,7 +162,7 @@ void world_map_write(Map* map){
 
 
 Chunk* world_chunkfile_read(Map* map, Coord2i coord){
-    FILE* chunkfile = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(map->id) + ".map/chunks/c" + std::to_string(coord.x) + "x" + std::to_string(coord.y) + ".chk").c_str(), "rb");
+    FILE* chunkfile = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map->id) + "/chunks/c" + std::to_string(coord.x) + "x" + std::to_string(coord.y) + ".chk").c_str(), "rb");
 
     //Chunk is new (no chunkfile)
     if(!chunkfile){
@@ -182,8 +188,8 @@ void world_chunkfile_write(Map* map, Chunk* chunk){
     int cx = chunk -> pos.x;
     int cy = chunk -> pos.y;
 
-    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/chunks/"));
-    FILE* chunkfile = fopen(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/chunks/c" + std::to_string(cx) + "x" + std::to_string(cy) + ".chk").c_str(), "wb");
+    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/chunks/"));
+    FILE* chunkfile = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/chunks/c" + std::to_string(cx) + "x" + std::to_string(cy) + ".chk").c_str(), "wb");
 
     fwrite(&cx, sizeof(int), 1, chunkfile);
     fwrite(&cy, sizeof(int), 1, chunkfile);
@@ -268,13 +274,13 @@ void world_chunk_refresh_metatextures(Map* map, Chunk* chunk){
 
 }
 
-
+//flubby *IS* important, if think its not, you're wrong (ask wrapfield, he always 'members).
 void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrain_t, bool skip, bool tiles[256], bool overlays[256], int anim_frame){
     uint tiles_x = terrain_t->width / terrain_t->tile_size; //Number of tiles wide
 
     for(uint y = 0; y < meta_img -> height; ++y) {
         uint ctile_y = y / 16;   //Position of tile inside chunk
-        uint pixel_y = y % 16;  //Position of pixel inside tile
+        uint pixel_y_flubby = y % 16;  //Position of pixel inside tile
         for (uint x = 0; x < meta_img -> width; ++x) {
             uint ctile_x = x / 16;       //Position of tile inside chunk
             uint pixel_x = x % 16;       //Position of pixel inside tile
@@ -288,11 +294,18 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
                 continue;
 
             //Non animated tiles should be skipped at this point.
+            if(chunk->background_tiles[ctile_x + (ctile_y * 16)] == 0)
+                continue;
+
+            //Tile was likely deleted by nails, or invalid tile count
+            if(chunk -> background_tiles[ctile_x + (ctile_y * 16)] >= map -> tile_count){
+                chunk -> background_tiles[ctile_x + (ctile_y * 16)] = 0; // void
+            }
 
             Block block = map -> tile_properties[chunk -> background_tiles[ctile_x + (ctile_y * 16)]];
-
             uint tile = block.atlas_index;
 
+            uint pixel_y = pixel_y_flubby;
             if(block.options & TILE_TEX_FLIP_X)
                 pixel_x = terrain_t->tile_size - pixel_x - 1;
 
@@ -314,10 +327,16 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
             memcpy(&(meta_img -> imageData[meta_pixel]), &(terrain_t -> image -> imageData[render_pixel]), 4);
 
             /* Overlay tiles */
+            if(!g_overlays)
+                continue;
 
             if(chunk->overlay_tiles[ctile_x + (ctile_y * 16)] == 0)
                 continue;
 
+            //Tile was likely deleted by nails, or invalid tile count
+            if(chunk -> overlay_tiles[ctile_x + (ctile_y * 16)] >= map -> tile_count){
+                chunk -> overlay_tiles[ctile_x + (ctile_y * 16)] = 0; // void
+            }
             block = map -> tile_properties[chunk -> overlay_tiles[ctile_x + (ctile_y * 16)]];
 
             tile = block.atlas_index;
@@ -346,14 +365,14 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
 }
 
 void write_map_resource(Map* map, const std::string& filename, void* data, size_t size){
-    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/"));
-    FILE* file = fopen((get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/") + filename).c_str(), "wb");
+    std::filesystem::create_directories(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/"));
+    FILE* file = fopen((get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str(), "wb");
     fwrite(data, size, 1, file);
     fclose(file);
 }
 
-void read_map_resource(Map* map,const std::string& filename, void* out, size_t size){
-    FILE* file = fopen((get_resource_path(g_game_path, "maps/" + std::to_string(map -> id) + ".map/") + filename).c_str(), "rb");
+void read_map_resource(Map* map, const std::string& filename, void* out, size_t size){
+    FILE* file = fopen((get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str(), "rb");
 
     if(!file)
         return;
