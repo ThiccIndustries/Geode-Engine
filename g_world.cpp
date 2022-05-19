@@ -25,8 +25,8 @@ void world_set_chunk_callbacks(
 }
 
 void world_populate_chunk_buffer(Entity* viewport_e){
-    int player_chunk_x = floor((viewport_e -> position.x + (viewport_e -> camera.position.x)) / 256);
-    int player_chunk_y = floor((viewport_e -> position.y + (viewport_e -> camera.position.y)) / 256);
+    int player_chunk_x = floor((viewport_e -> transform -> position.x + (viewport_e -> transform -> camera.position.x)) / 256);
+    int player_chunk_y = floor((viewport_e -> transform -> position.y + (viewport_e -> transform -> camera.position.y)) / 256);
 
     for(int y = 0; y <= RENDER_DISTANCE * 2; ++y){
         for(int x = 0; x <= RENDER_DISTANCE * 2; ++x){
@@ -43,7 +43,7 @@ void world_populate_chunk_buffer(Entity* viewport_e){
                 if(chunk_unload_callback == nullptr)
                     error("Chunk unload funcptr not set.", "Chunk unload function pointer not set.");
 
-                chunk_unload_callback(viewport_e-> map, g_chunk_buffer[chunki]);
+                chunk_unload_callback(viewport_e -> transform -> map, g_chunk_buffer[chunki]);
 
                 for(int i = 0; i < 2; i++){
                     if(g_chunk_buffer[chunki] -> render_texture[i] != nullptr) {
@@ -58,7 +58,7 @@ void world_populate_chunk_buffer(Entity* viewport_e){
             if(chunk_unload_callback == nullptr)
                 error("Chunk load funcptr not set.", "Chunk Load function pointer not set.");
 
-            g_chunk_buffer[chunki] = chunk_load_callback(viewport_e -> map, Coord2i{chunk_x, chunk_y});
+            g_chunk_buffer[chunki] = chunk_load_callback(viewport_e -> transform -> map, Coord2i{chunk_x, chunk_y});
         }
     }
 }

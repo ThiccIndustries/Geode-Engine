@@ -23,7 +23,6 @@ void (* tick_callback)();
 
 int time_timer_purge();
 
-
 void time_update_time(double glfw_time){
     g_time -> delta = glfw_time - g_time -> global;
     g_time -> global = glfw_time;

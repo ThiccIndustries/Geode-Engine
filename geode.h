@@ -11,11 +11,15 @@
 #include <iostream>
 #include <map>
 #include <cmath>
+#include <filesystem>
+#include <algorithm>
 #include "GL/glew.h"
 #include "GLFW/glfw3.h"
 
-/*--- Settings, bitflags, and selectors ---*/
 
+
+/*--- Settings, bitflags, and selectors ---*/
+#define SEPARATOR std::filesystem::path::preferred_separator
 #define RENDER_SCALE 4
 #define RENDER_DISTANCE 1
 #define RENDER_WINX 240
@@ -39,7 +43,6 @@
 #define STORAGE_SIZE 96
 
 #define TIME_TPS 64
-
 #define VOID_TILE {0, 0, 0, 0 }
 /*--- Enums and structs ---*/
 
@@ -91,7 +94,6 @@ typedef struct Coord2d{
     Coord2d operator+(const Coord2d& c) const{
         return {this -> x + c.x, this -> y + c.y};
     }
-
 
 }Coord2d;
 
@@ -180,26 +182,17 @@ typedef struct Map{
     Block* tile_properties;
 }Map;
 
-//All Entity types must contain an Entity member 'e' as their first member
+struct Component;
+struct Transform;
+struct Renderer;
+struct Collider;
+
 typedef struct Entity{
-    uint        id;                         //id of the entity in g_entity_registry
-    Coord2d     position;
-    Coord2d     velocity;
-    Map*        map;
-    uint        atlas_index;                //Index of the Upper-Left corner of sprites 3x3 sprite sheet //TODO: What?
-    Coord2i     spritesheet_size;           //Size of the sprite sheet { directions, frames }
-    uint        frame_count;                //Number of animation frames
-    uint*       frame_order;                //Order of frames in array
-    BoundingBox col_bounds{};               //Bounding Box for entity
-    BoundingBox hit_bounds{};               //Hitbox for entity
-    Camera      camera{8,8};                //TODO: Seems strange to give every ent. a camera, but i guess it could allow cool stuff like spectating? P.S. might be useful for multiplayer too.
-    uint        move_state;                 //Is entity moving
-    uint        direction;                  //Direction entity facing
-    uint        animation_rate;             //Rate at which to animate movement speed
-    int         health;                     //
-    uint        type;                       //Type enum of Entity. Def. ENT_GENERIC
-    void        (*tick_func)(Entity* e);    //Function executed on tick
-    void        (*death_func)(Entity* e);   //Function executed on death
+    uint        id;                                     //id of the entity in g_entity_registry
+    int        health;                                 //Health of the entity
+    Component*  components[256]{};                      //If you think you need more, you're probably wrong
+    Transform*  transform = (Transform*)components[0];  //Transform shortcut
+    operator Transform*() { return (Transform*)this -> components[0]; }
 } Entity;
 
 typedef struct Time{
@@ -208,7 +201,7 @@ typedef struct Time{
     double delta = 0;           //Time since last frame
     double global = 0;          //Absolute time since game was started
     int    fps = 0;
-    bool   paused = false;  //Pause time
+    bool   paused = false;      //Pause time
 } Time;
 
 //Timer reference ID
@@ -288,22 +281,22 @@ const Color COLOR_BLACK = {0, 0, 0};
 
 /*--- Global objects and registries. ---*/
 
-//minicraft_time.cpp
+//g_time.cpp
 extern Time* g_time;        //Global time object
 
-//minicraft_world.cpp
+//g_world.cpp
 extern Chunk* g_chunk_buffer[];    //Contains loaded chunks
 extern Option g_overlays;
 
-//minicraft_entity.cpp
+//g_entity.cpp
 extern Entity*  g_entity_registry[]; //All active entities
 extern uint     g_entity_highest_id; //The highest entity ID active in g_entity_registry
 
-//minicraft_main.cpp
+//g_main.cpp
 extern std::string g_game_path; //Global reference to argv[0]
 extern Option g_debug;
 
-//minicraft_rendering.cpp
+//g_rendering.cpp
 extern Video_Mode g_video_mode;
 extern Font* g_def_font;
 
@@ -313,13 +306,13 @@ extern uint     g_dynamic_panel_highest_id; //Highest active UI panel
 
 /*--- Functions ---*/
 
-//minicraft_texture.cpp
+//g_texture.cpp
 Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);               //Generate Texture Object
 Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);  //Load a 24-bit BMP
 void        texture_bind(Texture* t, GLuint sampler);                                               //Bind texture to GL_TEXTURE_2D
 void        texture_destroy(Texture* t);                                                            //Delete texture
 
-//minicraft_world.cpp
+//g_world.cpp
 void world_set_chunk_callbacks(
         Chunk*      (*load_callback)(Map* map, Coord2i coord),
         void        (*unload_callback)(Map* map, Chunk* chunk)
@@ -336,7 +329,7 @@ void    world_chunk_refresh_metatextures(Map* map, Chunk* chunk);               
 void    write_map_resource(Map* map, const std::string& filename, void* data, size_t size);
 void    read_map_resource(Map* map, const std::string& filename, void* out, size_t size);
 
-//minicraft_rendering.cpp
+//g_rendering.cpp
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* title, bool free_aspect);    //Init OpenGL, GLFW, and create window
 void        rendering_draw_chunk(Chunk* chunk, Entity* viewport_e);
 void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);                                      //Draw an entity
@@ -350,7 +343,7 @@ void        rendering_draw_panel(Panel* panel);
 Coord2d     rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d pos);                                                       //Get world position of viewport position
 void        rendering_update_chunk_texture(Chunk* c);                                                                               //Update chunk texture
 
-//minicraft_input.cpp
+//g_input.cpp
 void input_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);   //Keyboard callback
 void input_mouse_button_callback(GLFWwindow* window, int button, int actions, int mods);    //Mouse button callback
 void input_mouse_position_callback(GLFWwindow* window, double xpos, double ypos);           //Mouse position callback
@@ -373,7 +366,7 @@ Coord2d input_mouse_position();             //Get mouse position
 void input_poll_input();                    //Input poll
 void input_tick();
 
-//minicraft_input.cpp
+//g_input.cpp
 void time_update_time(double glfw_time);                    //Update time
 void time_set_tick_callback(void (*callback_function)());   //Add a function pointer to list of functions called every tick
 Timer* time_timer_start(long duration);                     //Start a timer and return a timer id
@@ -381,16 +374,33 @@ void time_callback_start(long duration, void (*callback_function)(void* passthou
 bool time_timer_finished(Timer*& t);                        //check if timer is finished, if finished, deletes the timer
 void time_timer_cancel(Timer*& t);                          //end and delete the timer
 
-//minicraft_entity.cpp
-Entity* entity_create(Entity* entity);                                          //Add entity to entity_registry and assign id. Returns pointer address for convenience
-void    entity_move(Entity* entity, Coord2d delta, bool respect_collisions);    //Move an entity
+//g_entity.cpp
+Entity* entity_create(); //Add entity to entity_registry and assign id. Returns pointer address for convenience
+
+Component* entity_get_component(Entity* entity, uint type);
+void    entity_kill(Entity* entity);
 void    entity_delete(uint id);                                                 //Removes entity to entity_registry and deletes Entity
 void    entity_tick();                                                          //Ticks all entities
-Coord2d entity_collision(Entity* entity, Coord2d delta);                        //Check entity collision
-Entity* entity_hit(Entity* entity, Coord2d delta);                              //Check entity hits
-bool    entity_AABB(BoundingBox a, BoundingBox b);                              //Check AABB collision
+Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta);   //Test collider collisions
+Entity* entity_hit(Collider* col, Transform* transform);       //Check collider hits
+bool    entity_AABB(BoundingBox a, BoundingBox b);             //Check AABB collision
 void    entity_damage(Entity* entity, uint damage);
-Entity* entity_create_from_type(uint e);                                        //Defined by game
+
+inline bool entity_contains_component(Entity* entity, uint type){
+    return entity_get_component(entity, type) != nullptr;
+}
+
+template <typename T>
+T* entity_add_component(Entity* entity){
+    T* component = new T();
+    for(int i = 0; i < 256; ++i){
+        if(entity -> components[i] == nullptr) {
+            entity->components[i] = (Component*)component;
+            return (T*)entity -> components[i];
+        }
+    }
+    return nullptr;
+}
 
 //g_ui.cpp
 void ui_tick();
@@ -451,7 +461,6 @@ Panel* ui_create_checkbox(int size, Color fg, Color bg, T* out, T sel, T dsel){
 }
 
 template <typename T>
-
 void ui_refresh_checkbox(Panel* checkbox){
     Panel_Button* cb = (Panel_Button*)checkbox;
     typedef struct Packet{
@@ -520,9 +529,11 @@ inline double distancec2d(Coord2d a, Coord2d b){
 }
 
 
-inline std::string get_resource_path(const std::string& executable_path, const std::string& resource_name){
-    uint substri = executable_path.find_last_of('/');
-    return executable_path.substr(0, substri) + "/" + resource_name;
+inline std::string get_resource_path(const std::string& executable_path, std::string resource_name){
+    std::replace(resource_name.begin(), resource_name.end(), '/', SEPARATOR);
+    uint substri = executable_path.find_last_of(SEPARATOR);
+    return executable_path.substr(0, substri) + SEPARATOR + resource_name;
 }
 
+#include "g_components.h"
 #endif
