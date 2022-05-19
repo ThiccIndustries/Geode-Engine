@@ -67,14 +67,18 @@ void ui_tick(){
         if(g_dynamic_panel_registry[i] == nullptr)
             continue;
 
-        if(g_dynamic_panel_registry[i] -> tick_func != nullptr)
-            g_dynamic_panel_registry[i] -> tick_func(g_dynamic_panel_registry[i], g_dynamic_panel_registry[i] -> packet);
+        int child = g_dynamic_panel_registry[i] -> child_count;
+        for(uint j = 0; j < child; ++j){
+            if(g_dynamic_panel_registry[i] == nullptr)
+                break;
 
-        for(uint j = 0; j < g_dynamic_panel_registry[i] -> child_count; ++j){
             if(g_dynamic_panel_registry[i] -> children[j] -> dynamic){
                 g_dynamic_panel_registry[i] -> children[j] -> tick_func(g_dynamic_panel_registry[i] -> children[j], g_dynamic_panel_registry[i] -> children[j] -> packet);
             }
         }
+
+        if(g_dynamic_panel_registry[i] != nullptr && g_dynamic_panel_registry[i] -> tick_func != nullptr)
+            g_dynamic_panel_registry[i] -> tick_func(g_dynamic_panel_registry[i], g_dynamic_panel_registry[i] -> packet);
     }
 }
 
@@ -84,14 +88,27 @@ void ui_button_tick(Panel* p, void* v){
     pos.x = pos.x / (g_video_mode.window_scale);
     pos.y = pos.y / (g_video_mode.window_scale);
 
-    if( (pos.x >= p -> position.x && pos.x <= p -> position.x + p -> size.x)
-    &&  (pos.y >= p -> position.y && pos.y <= p -> position.y + p -> size.y)
-    &&  input_get_button_down(GLFW_MOUSE_BUTTON_1)){
+    Coord2i ppos = ui_panel_global_position(p);
 
+    if( (pos.x >= ppos.x && pos.x <= ppos.x + p -> size.x)
+    &&  (pos.y >= ppos.y && pos.y <= ppos.y + p -> size.y)
+    &&  input_get_button_down_tick(GLFW_MOUSE_BUTTON_1)){
+        
         pb -> click_func(pb -> packet);
     }
 }
 
+Coord2i ui_panel_global_position(Panel* p){
+    Coord2i ppos = p -> position;
+
+    //Recurses up the parentage
+    Panel* parent = p -> parent;
+    while(parent != nullptr){
+        ppos = ppos + parent->position;
+        parent = parent -> parent;
+    }
+    return ppos;
+}
 /* UI Extensions */
 Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value){
     Panel* bar = new Panel();
@@ -126,4 +143,33 @@ Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, 
     }
 
     return bar;
+}
+Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval){
+    Panel_Text* t = new Panel_Text;
+    
+    t -> font = font;
+    t -> text = prefix + std::to_string(*value);
+   
+
+    struct Packet{
+        std::string prefix;
+        int* val;
+        long last_update;
+        uint update_interval;
+    };
+
+    Packet* p = new Packet{prefix, value, g_time -> tick, update_interval};
+
+    t -> p.dynamic = true;
+    t -> p.packet = p;
+    t -> p.tick_func =[](Panel* p, void* v){
+        Packet* pac = (Packet*)v;
+        if(g_time -> tick - pac -> last_update < pac -> update_interval)
+            return;
+
+        pac -> last_update = g_time -> tick;
+        ((Panel_Text*)p) -> text = pac -> prefix + std::to_string(*(pac -> val));
+    };
+
+    return t;
 }

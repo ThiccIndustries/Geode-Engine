@@ -9,7 +9,9 @@
 Entity* g_entity_registry[ENTITY_MAX];
 uint g_entity_highest_id = 0;
 
-Entity* entity_create(Entity* entity){
+Entity* entity_create(){
+    Entity* entity = new Entity();
+    entity -> transform = entity_add_component<Transform>(entity);
     for(int i = 0; i < ENTITY_MAX; ++i){
         if(g_entity_registry[i] == nullptr){
             entity -> id = i;
@@ -23,6 +25,14 @@ Entity* entity_create(Entity* entity){
     }
 
     return entity;
+}
+
+Component* entity_get_component(Entity* entity, uint type){
+    for(auto & component : entity -> components){
+        if(component != nullptr && component->type == type)
+            return component;
+    }
+    return nullptr;
 }
 
 //Safely delete Entity pointer while also cleaning entity_registry
@@ -42,38 +52,6 @@ void entity_delete(uint id){
 
 }
 
-void entity_move(Entity* entity, Coord2d delta, bool respect_collisions){
-    if(delta.x == 0 && delta.y == 0)
-        return;
-
-    //Split axis into two separate movement checks to allow "slipping" on a wall
-    if(delta.x != 0 && delta.y != 0){
-        entity_move(entity, {delta.x, 0}, respect_collisions);
-        entity_move(entity, {0, delta.y}, respect_collisions);
-        return;
-    }
-
-    Coord2d new_delta = delta;
-
-    if(respect_collisions)
-        new_delta = entity_collision(entity, delta);
-
-    Coord2d new_ent_pos = {entity -> position.x + new_delta.x,
-                           entity -> position.y + new_delta.y};
-
-    entity -> position = new_ent_pos;
-    entity -> move_state = ENT_STATE_MOVING;
-
-    if(delta.x > 0)
-        entity -> direction = DIRECTION_EAST;
-    if(delta.x < 0)
-        entity -> direction = DIRECTION_WEST;
-    if(delta.y > 0)
-        entity -> direction = DIRECTION_SOUTH;
-    if(delta.y < 0)
-        entity -> direction = DIRECTION_NORTH;
-}
-
 void entity_tick(){
     for(int i = 0; i <= g_entity_highest_id; ++i){
         Entity* e = g_entity_registry[i];
@@ -81,32 +59,32 @@ void entity_tick(){
         if(e == nullptr)
             continue;
 
-        //Skip entities which are dead but not deleted yet
+        //TODO: Readd this
+        /*//Skip entities which are dead but not deleted yet
         if(e -> health <= 0)
-            continue;
-
-        e -> move_state = ENT_STATE_STATIONARY;
-        entity_move(e, e->velocity, true);
+            continue;*/
 
         //Tick entity
-        e -> tick_func(e);
+        for(auto & component : e->components){
+            if(component != nullptr && component->on_tick != nullptr)
+                component->on_tick(e, component);
+        }
 
     }
 }
 
-Coord2d entity_collision(Entity* entity, Coord2d delta){
+Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta){
 
     //   << delta.x << " " << delta.y << std::endl;
-
-    Coord2d new_ent_pos = entity -> position + delta;
+    Coord2d new_ent_pos = transform -> position + delta;
 
     //Global coordinates of bounding box, with new desired position
-    BoundingBox global_bb = { {entity->col_bounds.p1.x + new_ent_pos.x, entity->col_bounds.p1.y + new_ent_pos.y},
-                              {entity->col_bounds.p2.x + new_ent_pos.x, entity->col_bounds.p2.y + new_ent_pos.y} };
+    BoundingBox global_bb = { {col->col_bounds.p1.x + new_ent_pos.x, col->col_bounds.p1.y + new_ent_pos.y},
+                              {col->col_bounds.p2.x + new_ent_pos.x, col->col_bounds.p2.y + new_ent_pos.y} };
 
     Coord2i chunk;
-    Coord2i tile{ (int)(entity->position.x / 16),
-                  (int)(entity->position.y  / 16) };
+    Coord2i tile{ (int)(transform->position.x / 16),
+                  (int)(transform->position.y  / 16) };
 
     Chunk* chunkptr;
     Coord2i rel_tile;
@@ -126,8 +104,10 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
                 continue;
 
             //Tile is not solid, no need to check AABBa
-            if(!((g_block_registry[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)
-             || (g_block_registry[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ]->options & TILE_SOLID)))
+            uint index = chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ];
+            if(!((transform -> map->tile_properties[ chunkptr->background_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)
+             || (chunkptr -> background_tiles[rel_tile.x + (rel_tile.y * 16) ] == 0)
+             || (transform -> map->tile_properties[ chunkptr->overlay_tiles[rel_tile.x + (rel_tile.y * 16) ] ].options & TILE_SOLID)))
                 continue;
 
             BoundingBox tile_bb = { {(rel_tile.x * 16.0) + (chunk.x * 256.0)      , (rel_tile.y * 16.0) + (chunk.y * 256.0)},
@@ -151,7 +131,6 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
                     maximum_delta_y = delta.y - (global_bb.p1.y - 0.001 - tile_bb.p2.y);
                 }
 
-
                 return Coord2d{maximum_delta_x, maximum_delta_y};
             }
         }
@@ -161,34 +140,35 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
     //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
-        Entity* checking_ent = g_entity_registry[i];
+        auto* check_col = (Collider*)entity_get_component(g_entity_registry[i], COMP_COLLIDER);
+        auto* check_transform = (Transform*) entity_get_component(g_entity_registry[i], COMP_TRANSFORM);
 
-        if(checking_ent == nullptr)
+        if(check_col == nullptr)
             continue;
 
-        if(checking_ent == entity)
+        if(check_transform == transform)
             continue;
 
         BoundingBox ent_g_bb = {
-                {checking_ent->col_bounds.p1.x + checking_ent->position.x, checking_ent->col_bounds.p1.y + checking_ent->position.y},
-                {checking_ent->col_bounds.p2.x + checking_ent->position.x, checking_ent->col_bounds.p2.y + checking_ent->position.y},
+                {check_col->col_bounds.p1.x + check_transform->position.x, check_col->col_bounds.p1.y + check_transform->position.y},
+                {check_col->col_bounds.p2.x + check_transform->position.x, check_col->col_bounds.p2.y + check_transform->position.y},
         };
 
         if(entity_AABB(ent_g_bb, global_bb)){
             double maximum_delta_x = 0, maximum_delta_y = 0;
 
-            if(delta.x > 0) {
-                maximum_delta_x = delta.x - (global_bb.p2.x + 0.001 - ent_g_bb.p1.x);
+            if(check_transform->velocity.x > 0) {
+                maximum_delta_x = check_transform->velocity.x - (global_bb.p2.x + 0.001 - ent_g_bb.p1.x);
 
             }
-            else if(delta.x < 0){
-                maximum_delta_x = delta.x - (global_bb.p1.x - 0.001 - ent_g_bb.p2.x);
+            else if(check_transform->velocity.x < 0){
+                maximum_delta_x = check_transform->velocity.x - (global_bb.p1.x - 0.001 - ent_g_bb.p2.x);
             }
-            if(delta.y > 0){
-                maximum_delta_y = delta.y - (global_bb.p2.y + 0.001 - ent_g_bb.p1.y);
+            if(check_transform->velocity.y > 0){
+                maximum_delta_y = check_transform->velocity.y - (global_bb.p2.y + 0.001 - ent_g_bb.p1.y);
             }
-            else if(delta.y < 0){
-                maximum_delta_y = delta.y - (global_bb.p1.y - 0.001 - ent_g_bb.p2.y);
+            else if(check_transform->velocity.y < 0){
+                maximum_delta_y = check_transform->velocity.y - (global_bb.p1.y - 0.001 - ent_g_bb.p2.y);
             }
 
 
@@ -198,31 +178,33 @@ Coord2d entity_collision(Entity* entity, Coord2d delta){
 
     return delta;
 }
-Entity* entity_hit(Entity* entity, Coord2d delta){
+
+Entity* entity_hit(Collider* col, Transform* transform){
 
     //   << delta.x << " " << delta.y << std::endl;
 
-    Coord2d new_ent_pos = entity -> position + delta;
+    Coord2d new_ent_pos = transform -> position + transform->velocity;
 
     //Global coordinates of bounding box, with new desired position
-    BoundingBox global_bb = { {entity->hit_bounds.p1.x + new_ent_pos.x, entity->hit_bounds.p1.y + new_ent_pos.y},
-                              {entity->hit_bounds.p2.x + new_ent_pos.x, entity->hit_bounds.p2.y + new_ent_pos.y} };
+    BoundingBox global_bb = { {col->hit_bounds.p1.x + new_ent_pos.x, col->hit_bounds.p1.y + new_ent_pos.y},
+                              {col->hit_bounds.p2.x + new_ent_pos.x, col->hit_bounds.p2.y + new_ent_pos.y} };
 
     //Check all entities
     //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
-        Entity* checking_ent = g_entity_registry[i];
+        auto* check_col = (Collider*)entity_get_component(g_entity_registry[i], COMP_COLLIDER);
+        auto* check_transform = (Transform*) entity_get_component(g_entity_registry[i], COMP_TRANSFORM);
 
-        if(checking_ent == nullptr)
+        if(check_col == nullptr)
             continue;
 
-        if(checking_ent == entity)
+        if(check_col == col)
             continue;
 
         BoundingBox ent_g_bb = {
-                {checking_ent->hit_bounds.p1.x + checking_ent->position.x, checking_ent->hit_bounds.p1.y + checking_ent->position.y},
-                {checking_ent->hit_bounds.p2.x + checking_ent->position.x, checking_ent->hit_bounds.p2.y + checking_ent->position.y},
+                {check_col->hit_bounds.p1.x + check_transform->position.x, check_col->hit_bounds.p1.y + check_transform->position.y},
+                {check_col->hit_bounds.p2.x + check_transform->position.x, check_col->hit_bounds.p2.y + check_transform->position.y},
         };
 
         if(entity_AABB(ent_g_bb, global_bb))
@@ -266,7 +248,17 @@ void entity_damage(Entity* entity, uint damage){
     }
 
     if(entity -> health == 0){
-        entity->death_func(entity);
+        for(auto & component : entity->components){
+            if(component != nullptr && component->on_death != nullptr)
+                component->on_death(entity, component);
+        }
+    }
+}
+
+void entity_kill(Entity* entity){
+    for(auto & component : entity->components){
+        if(component != nullptr && component->on_death != nullptr)
+            component->on_death(entity, component);
     }
 }
 
