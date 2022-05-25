@@ -182,7 +182,16 @@ typedef struct Map{
     Block* tile_properties;
 }Map;
 
-struct Component;
+struct Entity;
+
+typedef struct Component{
+    uint type = 0;
+    void (*on_tick)(Entity* e, Component* c) = nullptr;
+    void (*on_death)(Entity* e, Component* c) = nullptr;
+    void (*on_create)(Entity* e, Component* c) = nullptr;
+} Component;
+
+//Defined in g_components.h
 struct Transform;
 struct Renderer;
 struct Collider;
@@ -228,7 +237,7 @@ typedef struct Panel{
     Panel** children;
     uint    child_count = 0;
     uint    type = PANEL_EMPTY;
-    
+
     /* Dynamic panels only */
     bool    dynamic = false;                                    //Dynamic panel or static panel
     bool    active = false;                                     //Dynamic panel active or not
@@ -264,8 +273,8 @@ typedef struct Panel_Button{
     void* packet;
     void (*click_func)(void* v);
 
-    Panel_Button(){ 
-        p.type = PANEL_BUTTON; 
+    Panel_Button(){
+        p.type = PANEL_BUTTON;
         p.dynamic = true;
         p.active = false;
         p.tick_func = &ui_button_tick;
@@ -302,7 +311,7 @@ extern Font* g_def_font;
 
 //g_ui.cpp
 extern Panel*   g_dynamic_panel_registry[]; //All rendering dynamic panels
-extern uint     g_dynamic_panel_highest_id; //Highest active UI panel    
+extern uint     g_dynamic_panel_highest_id; //Highest active UI panel
 
 /*--- Functions ---*/
 
@@ -377,7 +386,6 @@ void time_timer_cancel(Timer*& t);                          //end and delete the
 //g_entity.cpp
 Entity* entity_create(); //Add entity to entity_registry and assign id. Returns pointer address for convenience
 
-Component* entity_get_component(Entity* entity, uint type);
 void    entity_kill(Entity* entity);
 void    entity_delete(uint id);                                                 //Removes entity to entity_registry and deletes Entity
 void    entity_tick();                                                          //Ticks all entities
@@ -386,19 +394,37 @@ Entity* entity_hit(Collider* col, Transform* transform);       //Check collider 
 bool    entity_AABB(BoundingBox a, BoundingBox b);             //Check AABB collision
 void    entity_damage(Entity* entity, uint damage);
 
-inline bool entity_contains_component(Entity* entity, uint type){
-    return entity_get_component(entity, type) != nullptr;
-}
-
 template <typename T>
 T* entity_add_component(Entity* entity){
     T* component = new T();
     for(int i = 0; i < 256; ++i){
         if(entity -> components[i] == nullptr) {
             entity->components[i] = (Component*)component;
+
+            if(entity -> components[i]->on_create != nullptr)
+                entity->components[i]->on_create(entity, entity->components[i]);
+
             return (T*)entity -> components[i];
         }
     }
+
+    //Failed to add component
+    delete component;
+    return nullptr;
+}
+
+template <typename T>
+T* entity_get_component(Entity* e){
+    Component* temp = (Component*)new T;
+
+    for(int i = 0; i < 256; ++i){
+        if(e -> components[i] != nullptr && e -> components[i]->type == temp -> type) {
+            delete temp;
+            return (T*)e->components[i];
+        }
+    }
+
+    delete temp;
     return nullptr;
 }
 
@@ -535,5 +561,8 @@ inline std::string get_resource_path(const std::string& executable_path, std::st
     return executable_path.substr(0, substri) + SEPARATOR + resource_name;
 }
 
-#include "g_components.h"
+#include "components/collider.h"
+#include "components/renderer.h"
+#include "components/transform.h"
+
 #endif

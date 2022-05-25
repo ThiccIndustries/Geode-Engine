@@ -10,6 +10,7 @@ Entity* g_entity_registry[ENTITY_MAX];
 uint g_entity_highest_id = 0;
 
 Entity* entity_create(){
+
     Entity* entity = new Entity();
     entity -> transform = entity_add_component<Transform>(entity);
     for(int i = 0; i < ENTITY_MAX; ++i){
@@ -60,9 +61,9 @@ void entity_tick(){
             continue;
 
         //TODO: Readd this
-        /*//Skip entities which are dead but not deleted yet
+        //Skip entities which are dead but not deleted yet
         if(e -> health <= 0)
-            continue;*/
+            continue;
 
         //Tick entity
         for(auto & component : e->components){
@@ -74,7 +75,6 @@ void entity_tick(){
 }
 
 Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta){
-
     //   << delta.x << " " << delta.y << std::endl;
     Coord2d new_ent_pos = transform -> position + delta;
 
@@ -140,6 +140,9 @@ Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta){
     //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
+        if(g_entity_registry[i] == nullptr)
+            continue;
+
         auto* check_col = (Collider*)entity_get_component(g_entity_registry[i], COMP_COLLIDER);
         auto* check_transform = (Transform*) entity_get_component(g_entity_registry[i], COMP_TRANSFORM);
 
@@ -193,6 +196,8 @@ Entity* entity_hit(Collider* col, Transform* transform){
     //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
+        if(g_entity_registry[i] == nullptr)
+            continue;
         auto* check_col = (Collider*)entity_get_component(g_entity_registry[i], COMP_COLLIDER);
         auto* check_transform = (Transform*) entity_get_component(g_entity_registry[i], COMP_TRANSFORM);
 
@@ -213,32 +218,6 @@ Entity* entity_hit(Collider* col, Transform* transform){
 
     return nullptr;
 }
-
-struct shake_event{
-  Entity* e;
-  Camera cam_origin;
-  int count;
-};
-
-/*void camera_shake(Entity* entity, Camera cam_origin, int count){
-
-    if(count == 0) {
-        entity->camera = cam_origin;
-        return;
-    }
-
-    shake_event* s = new shake_event{entity, cam_origin, count};
-
-    time_callback_start(1, [](void *ptr){
-        double dx = (((double)rand() / RAND_MAX) * 4) - 2;
-        double dy = (((double)rand() / RAND_MAX) * 4) - 2;
-           << dx << " " << dy << std::endl;
-        shake_event* shake = (shake_event*)ptr;
-
-        shake-> e -> camera.position = shake -> e -> camera.position + Coord2d{dx, dy};
-        camera_shake(shake -> e, shake -> cam_origin, shake -> count - 1);
-    }, s);
-}*/
 
 void entity_damage(Entity* entity, uint damage){
     if(entity -> health > 0) {

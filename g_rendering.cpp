@@ -75,7 +75,7 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
 }
 
 void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
-    Collider* col = (Collider*)entity_get_component(viewport_e, COMP_COLLIDER);
+    Collider* col = entity_get_component<Collider>(viewport_e);
     int anim_frame = 0;
 
     if(chunk == nullptr)
@@ -88,7 +88,7 @@ void rendering_draw_chunk(Chunk* chunk, Entity* viewport_e){
         anim_frame += anim_tick / anim_rate_d;
     }
 
-    Transform* transform = (Transform*)entity_get_component(viewport_e, COMP_TRANSFORM);
+    Transform* transform = entity_get_component<Transform>(viewport_e);
 
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
@@ -187,7 +187,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     double viewport_y = (viewport_e -> transform -> position.y + (viewport_e -> transform -> camera.position.y));
 
     //Viewport Entity interp
-    auto vcol = (Collider*)entity_get_component(viewport_e, COMP_COLLIDER);
+    auto vcol = entity_get_component<Collider>(viewport_e);
     Coord2d delta_x = {viewport_e -> transform -> velocity.x * tick_interp, 0};
     if(vcol == nullptr || entity_collision(vcol, viewport_e -> transform, delta_x) == delta_x) {
         viewport_x += viewport_e->transform->velocity.x * tick_interp;
@@ -202,7 +202,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     double entity_y = entity -> transform -> position.y - (viewport_y - (g_video_mode.window_resolution.y / (2 * scl)));
 
     //Entity Interp
-    auto ecol = (Collider*)entity_get_component(viewport_e, COMP_COLLIDER);
+    auto ecol = entity_get_component<Collider>(entity);
     delta_x = {entity -> transform -> velocity.x * tick_interp, 0};
     if(ecol == nullptr || entity_collision(ecol, entity->transform, delta_x) == delta_x)
         entity_x += entity -> transform -> velocity.x * tick_interp;
@@ -213,7 +213,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
 
 
     //Get texture for current state
-    auto eren = (Renderer*) entity_get_component(entity, COMP_RENDERER);
+    auto eren = entity_get_component<Renderer>(entity);
     uint index = eren -> atlas_index;
     bool inv_x = false;
 
@@ -293,7 +293,7 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
 
 void rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e){
     for(int i = g_entity_highest_id; i >= 0; i--){
-        if(g_entity_registry[i] == nullptr || entity_get_component(g_entity_registry[i], COMP_RENDERER) == nullptr)
+        if(g_entity_registry[i] == nullptr || entity_get_component<Renderer>(g_entity_registry[i]) == nullptr)
             continue;
 
         rendering_draw_entity(g_entity_registry[i], atlas_texture, viewport_e);
@@ -426,7 +426,7 @@ void rendering_draw_dialog(const std::string& title, const std::string& message,
 
 
 Coord2d rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d coord){
-    Transform* transform = (Transform*) entity_get_component(viewport_e, COMP_TRANSFORM);
+    Transform* transform = entity_get_component<Transform>(viewport_e);
     Coord2d position;
 
     int world_win_scl = g_video_mode.world_scale * g_video_mode.window_scale;
@@ -437,7 +437,7 @@ Coord2d rendering_viewport_to_world_pos(Entity* viewport_e, Coord2d coord){
 }
 
 void rendering_draw_panel(Panel* p){
-    rendering_draw_panel(p, {0, 0}); 
+    rendering_draw_panel(p, {0, 0});
 }
 
 void rendering_draw_panel(Panel* p, Coord2i parent_position){
@@ -466,13 +466,13 @@ void rendering_draw_panel(Panel* p, Coord2i parent_position){
 }
 
 void rendering_draw_panel_box(Panel* p, Coord2i parent_position){
-    
+
     int x1 = p -> position.x + parent_position.x;
     int x2 = x1 + p -> size.x;
 
     int y1 = p -> position.y + parent_position.y;
     int y2 = y1 + p -> size.y;
-    
+
     if(p -> has_background){
         glColor1c(p -> background_color);
         glBegin(GL_QUADS);{
@@ -498,7 +498,7 @@ void rendering_draw_panel_box(Panel* p, Coord2i parent_position){
 void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position){
     int x1 = p -> p.position.x + parent_position.x;
     int y1 = p -> p.position.y + parent_position.y;
-    
+
     int x2 = x1 + p -> font -> t -> tile_size * p -> text.length();
     int y2 = y1 + p -> font -> t -> tile_size;
 
@@ -520,10 +520,10 @@ void rendering_draw_panel_text(Panel_Text* p, Coord2i parent_position){
 }
 
 void rendering_draw_panel_sprite(Panel_Sprite* p, Coord2i parent_position){
-    
+
     int x1 = p -> p.position.x + parent_position.x;
     int y1 = p -> p.position.y + parent_position.y;
-    
+
     int x2 = x1 + p -> texture -> tile_size;
     int y2 = y1 + p -> texture -> tile_size;
 
