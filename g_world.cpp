@@ -7,6 +7,8 @@
 
 /*FINALLY! THE HELL FILE!*/
 #include "geode.h"
+#include "geode_ntn.h"
+
 #include <filesystem>
 #include <cstring> //Why is memcpy in here?
 
@@ -89,75 +91,79 @@ Chunk* world_get_chunk(Coord2i ccoord){
 }
 
 Map* world_map_read(uint id){
-    std::cout << get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.prp").c_str() << std::endl;
-    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.prp").c_str(), "rb");
-    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/tiles.prp").c_str(), "rb");
-
-
-    if(!texture_properties){
-        return nullptr;
-    }
-
-    if(!tiles_properties){
-        return nullptr;
-    }
-
-    //Size of texture tiles
-    uint texture_tilesize = 0;
-    uint tile_count = 0;
-
-    fread(&texture_tilesize, 1, sizeof(uint), texture_properties);
-    fread(&tile_count, 1, sizeof(uint), tiles_properties);
-
-    fclose(texture_properties);
-
-    Texture* map_texture = texture_load_bmp(get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.bmp"), TEXTURE_MULTIPLE | TEXTURE_STORE, texture_tilesize);
-
     Map* map = new Map;
     map -> id = id;
+
+    NTN_File* texture_prop = ntn_open_file(map, "texture");
+    NTN_File* tiles_prop = ntn_open_file(map, "tiles");
+
+    if(texture_prop == nullptr){
+        delete map;
+        return nullptr;
+    }
+
+    if(tiles_prop == nullptr){
+        delete map;
+        return nullptr;
+    }
+
+    ntn_print_tree(tiles_prop);
+
+    //Size of texture tiles
+    int texture_tilesize = ntn_get_int(texture_prop, "tile size");
+    int tile_count = ntn_get_int(tiles_prop, "tile count");
+
+    Texture* map_texture = texture_load(
+            get_resource_path(g_game_path, "maps/map" + std::to_string(id) + "/texture.bmp"),
+            TEXTURE_MULTIPLE | TEXTURE_STORE, texture_tilesize);
+
     map -> tilemap = map_texture;
     map -> tile_count = tile_count;
     map -> tile_properties = new Block[tile_count];
-    std::cout << map -> tile_count << std::endl;
+
     uint atlas_index;
     ushort packet1, packet2;
     uchar options;
 
     for(uint i = 0; i < tile_count; ++i){
-        fseek(tiles_properties, (0x10 * i) + 0x10, SEEK_SET);
-        fread(&atlas_index, sizeof(uint), 1, tiles_properties);
-        fread(&packet1,     sizeof(ushort), 1, tiles_properties);
-        fread(&packet2,     sizeof(ushort), 1, tiles_properties);
-        fread(&options,     sizeof(uchar), 1, tiles_properties);
+        atlas_index = ntn_get_int(tiles_prop, "tiles/tile" + std::to_string(i) + "/atlas index");
+        packet1     = ntn_get_int(tiles_prop, "tiles/tile" + std::to_string(i) + "/packet 1");
+        packet2     = ntn_get_int(tiles_prop, "tiles/tile" + std::to_string(i) + "/packet 2");
+        options     = ntn_get_byte(tiles_prop, "tiles/tile" + std::to_string(i) + "/options");
 
         map -> tile_properties[i] = {atlas_index, options, packet1, packet2};
     }
-    fclose(tiles_properties);
+
+    //ntn_close_file(texture_prop);
+    //ntn_close_file(tiles_prop);
 
     return map;
 }
 
 void world_map_write(Map* map){
+    //Create folder
     std::filesystem::create_directories(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/"));
-    FILE* texture_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/texture.prp").c_str(), "wb");
-    FILE* tiles_properties = fopen(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/tiles.prp").c_str(), "wb");
-    fwrite(&(map -> tilemap -> tile_size), sizeof(uint), 1, texture_properties);
-    fclose(texture_properties);
+
+    NTN_File* texture_prop = ntn_create_file("texture");
+    NTN_File* tiles_prop = ntn_create_file("tiles");
+
+    texture_prop = ntn_add(texture_prop, NTN_Int, "tile size", new int{(int)map -> tilemap -> tile_size});
+    ntn_write_file(map, texture_prop);
+    //ntn_close_file(texture_prop);
 
     //Write tiles file
-    fwrite(&(map -> tile_count), sizeof(uint), 1, tiles_properties);
-    std::cout << map -> tile_count << std::endl;
-
+    tiles_prop = ntn_add(tiles_prop, NTN_Int, "tile count", new int{(int)map -> tile_count});
+    tiles_prop = ntn_add(tiles_prop, NTN_Root, "tiles", nullptr);
     for(uint i = 0; i < map -> tile_count; ++i){
-        std::cout << map -> tile_properties[i].atlas_index << std::endl;
-        fseek(tiles_properties, (0x10 * i) + 0x10, SEEK_SET);
-        fwrite(&(map -> tile_properties[i].atlas_index),    sizeof(uint), 1, tiles_properties);
-        fwrite(&(map -> tile_properties[i].packet1),        sizeof(ushort), 1, tiles_properties);
-        fwrite(&(map -> tile_properties[i].packet2),        sizeof(ushort), 1, tiles_properties);
-        fwrite(&(map -> tile_properties[i].options),        sizeof(uchar), 1, tiles_properties);
+        tiles_prop = ntn_add(tiles_prop, NTN_Root, "tiles/tile" + std::to_string(i), nullptr);
+        tiles_prop = ntn_add(tiles_prop, NTN_Int, "tiles/tile" + std::to_string(i) + "/atlas index", &map -> tile_properties[i].atlas_index);
+        tiles_prop = ntn_add(tiles_prop, NTN_Int, "tiles/tile" + std::to_string(i) + "/packet 1", &map -> tile_properties[i].packet1);
+        tiles_prop = ntn_add(tiles_prop, NTN_Int, "tiles/tile" + std::to_string(i) + "/packet 2", &map -> tile_properties[i].packet2);
+        tiles_prop = ntn_add(tiles_prop, NTN_Byte, "tiles/tile" + std::to_string(i) + "/options", &map -> tile_properties[i].options);
     }
-    fclose(tiles_properties);
 
+    ntn_write_file(map, tiles_prop);
+    //ntn_close_file(tiles_prop);
 }
 
 
@@ -364,19 +370,46 @@ void world_modify_image(Map* map, Chunk* chunk, Image* meta_img, Texture* terrai
     }
 }
 
-void write_map_resource(Map* map, const std::string& filename, void* data, size_t size){
+#include "bzlib.h"
+
+void world_write_map_resource(Map* map, const std::string& filename, void* data, size_t size){
+
     std::filesystem::create_directories(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/"));
     FILE* file = fopen((get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str(), "wb");
     fwrite(data, size, 1, file);
     fclose(file);
 }
 
-void read_map_resource(Map* map, const std::string& filename, void* out, size_t size){
-    FILE* file = fopen((get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str(), "rb");
+
+
+size_t world_get_resource_size(Map* map, const std::string& filename){
+
+
+    std::filesystem::path p{(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str()};
+
+    size_t filesize;
+    try {
+        filesize = std::filesystem::file_size(p);
+    }catch(std::exception& e){
+        return -1;
+    }
+
+    return filesize;
+}
+
+int world_read_map_resource(Map* map, const std::string& filename, void* out){
+
+
+    std::filesystem::path p{(get_resource_path(g_game_path, "maps/map" + std::to_string(map -> id) + "/") + filename).c_str()};
+
+    FILE* file = fopen(p.c_str(), "rb");
 
     if(!file)
-        return;
+        return -1;
 
-    fread(out, size, 1, file);
+    size_t filesize = std::filesystem::file_size(p);
+
+    fread(out, filesize, 1, file);
     fclose(file);
+    return 0;
 }

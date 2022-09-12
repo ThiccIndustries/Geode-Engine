@@ -6,6 +6,10 @@
 
 #include "geode.h"
 
+Texture* loaded_textures[0xF];
+std::string loaded_texture_paths[0xF];
+int loaded_texture_count;
+
 Texture* texture_generate(Image* img, uchar texture_load_options, uint tile_size){
     Texture *textureptr = new Texture;
 
@@ -52,7 +56,23 @@ Font* texture_construct_font(Texture* texture, const std::string& font_atlas){
     return fontptr;
 }
 
-Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size){
+Texture* texture_load(const std::string& path, uchar texture_load_options, uint tile_size){
+    //Check if texture was already loaded
+
+    for(int i = 0; i < loaded_texture_count; ++i){
+
+        if(path == loaded_texture_paths[i]){
+            return loaded_textures[i];
+        }
+    }
+
+    //Too many textures in memory (Probably a texture leak?)
+    if(loaded_texture_count >= 0xF) {
+        error("Too many loaded textures.", "Too many loaded textures");
+        return nullptr;
+    }
+
+    //Not already loaded
     uchar header[54];       //BMP header
     uchar dataPos;          //RGB Data offset
     uint width, height;     //Width and height of image
@@ -119,8 +139,12 @@ Texture* texture_load_bmp(const std::string& path, uchar texture_load_options, u
     imageptr -> width       = width;
     imageptr -> height      = height;
     imageptr -> imageData   = rgba_array;
+    Texture* new_texture = texture_generate(imageptr, texture_load_options, tile_size);
+    loaded_textures[loaded_texture_count] = new_texture;
+    loaded_texture_paths[loaded_texture_count] = path;
+    loaded_texture_count++;
 
-    return texture_generate(imageptr, texture_load_options, tile_size);
+    return new_texture;
 }
 
 void texture_bind(Texture* t, GLuint sampler){

@@ -52,10 +52,17 @@ enum EntityState{
 };
 
 enum MovementDirection{
-    DIRECTION_NORTH,
-    DIRECTION_EAST,
     DIRECTION_SOUTH,
-    DIRECTION_WEST
+    DIRECTION_NORTH,
+    DIRECTION_WEST,
+    DIRECTION_EAST
+};
+
+enum SheetType{
+    SHEET_SINGLE,    //Single sprite for all directions
+    SHEET_VH,        //Vertical sprite, Horizontal Sprite
+    SHEET_UDH,       //Up sprite, Down sprite, Horizontal Sprite
+    SHEET_UDLR,      //Up sprite, Down sprite, Left Sprite, Right Sprite
 };
 
 typedef unsigned int  uint;     //Shorthand unsigned int type
@@ -125,6 +132,8 @@ typedef struct Video_Mode{
 }Video_Mode;
 
 //TODO: This is pointless
+//  Joe Mamma.
+
 //Camera struct for player entity
 typedef struct Camera{
     Coord2d position;
@@ -156,8 +165,8 @@ typedef struct Font{
 typedef struct Block{
     uint atlas_index;   //Index of texture
     uchar options;      //Tile bitflags
-    ushort packet1;     //ID of resource to drop
-    ushort packet2;     //drop count
+    uint packet1;     //ID of resource to drop
+    uint packet2;     //drop count
 }Block;
 
 //Simple AABB
@@ -186,6 +195,7 @@ struct Entity;
 
 typedef struct Component{
     uint type = 0;
+    int size = 0;
     void (*on_tick)(Entity* e, Component* c) = nullptr;
     void (*on_death)(Entity* e, Component* c) = nullptr;
     void (*on_create)(Entity* e, Component* c) = nullptr;
@@ -317,7 +327,7 @@ extern uint     g_dynamic_panel_highest_id; //Highest active UI panel
 
 //g_texture.cpp
 Texture*    texture_generate(Image* img, uchar texture_load_options, uint tile_size);               //Generate Texture Object
-Texture*    texture_load_bmp(const std::string& path, uchar texture_load_options, uint tile_size);  //Load a 24-bit BMP
+Texture*    texture_load(const std::string& path, uchar texture_load_options, uint tile_size);  //Load a 24-bit BMP
 void        texture_bind(Texture* t, GLuint sampler);                                               //Bind texture to GL_TEXTURE_2D
 void        texture_destroy(Texture* t);                                                            //Delete texture
 
@@ -335,14 +345,15 @@ void    world_modify_chunk(Coord2i ccoord, Coord2i tcoord, uint value); //Set ti
 Chunk*  world_chunkfile_read(Map* map, Coord2i ccoord);  //read chunk from file
 void    world_chunkfile_write(Map* map, Chunk* chunk);   //write chunk to chunkfile
 void    world_chunk_refresh_metatextures(Map* map, Chunk* chunk);                  //Refresh chunk rendering metatexture
-void    write_map_resource(Map* map, const std::string& filename, void* data, size_t size);
-void    read_map_resource(Map* map, const std::string& filename, void* out, size_t size);
+void    world_write_map_resource(Map* map, const std::string& filename, void* data, size_t size);
+int     world_read_map_resource(Map* map, const std::string& filename, void* out);
+size_t  world_get_resource_size(Map* map, const std::string& filename);
 
 //g_rendering.cpp
 GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs, uint us, const char* title, bool free_aspect);    //Init OpenGL, GLFW, and create window
 void        rendering_draw_chunk(Chunk* chunk, Entity* viewport_e);
-void        rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e);                                      //Draw an entity
-void        rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e);                                                    //Draw all entities in g_entity_registry
+void        rendering_draw_entity(Entity* entity, Entity* viewport_e);                                      //Draw an entity
+void        rendering_draw_entities(Entity* viewport_e);                                                    //Draw all entities in g_entity_registry
 void        rendering_draw_chunk_buffer(Entity* viewport_e);
 void        rendering_draw_text(const std::string& text, uint size, Font* font, Color color, Coord2d pos);                          //Draw text
 void        rendering_draw_bar(uint value, Coord2i position, Texture* ui_texture, uint atlas_index);
@@ -393,40 +404,7 @@ Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta);   
 Entity* entity_hit(Collider* col, Transform* transform);       //Check collider hits
 bool    entity_AABB(BoundingBox a, BoundingBox b);             //Check AABB collision
 void    entity_damage(Entity* entity, uint damage);
-
-template <typename T>
-T* entity_add_component(Entity* entity){
-    T* component = new T();
-    for(int i = 0; i < 256; ++i){
-        if(entity -> components[i] == nullptr) {
-            entity->components[i] = (Component*)component;
-
-            if(entity -> components[i]->on_create != nullptr)
-                entity->components[i]->on_create(entity, entity->components[i]);
-
-            return (T*)entity -> components[i];
-        }
-    }
-
-    //Failed to add component
-    delete component;
-    return nullptr;
-}
-
-template <typename T>
-T* entity_get_component(Entity* e){
-    Component* temp = (Component*)new T;
-
-    for(int i = 0; i < 256; ++i){
-        if(e -> components[i] != nullptr && e -> components[i]->type == temp -> type) {
-            delete temp;
-            return (T*)e->components[i];
-        }
-    }
-
-    delete temp;
-    return nullptr;
-}
+void    entity_load_entities(Map* map);
 
 //g_ui.cpp
 void ui_tick();
@@ -434,73 +412,6 @@ void ui_dynamic_panel_activate(Panel* dp);
 void ui_dynamic_panel_deactivate(Panel* dp);
 Coord2i ui_panel_global_position(Panel* p);
 
-//UI Constructors TODO: Move to separate UI Extensions header
-Panel* ui_create_health_bar(Texture* t, uint atlas_active, uint atlas_inactive, uint length, int* value);
-Panel_Text* ui_create_int_display(Font* font, std::string prefix, int* value, uint update_interval);
-void ui_refresh_checkbox(Panel* checkbox);
-
-template <typename T>
-Panel* ui_create_checkbox(int size, Color fg, Color bg, T* out, T sel, T dsel){
-    size *= 4;
-    Panel_Button* button = new Panel_Button();
-
-    Panel* box = new Panel();
-    Panel* indicator = new Panel();
-
-
-    button -> p.child_count = 2;
-    button -> p.children = new Panel*[button -> p.child_count]{box, indicator};
-
-    box -> type = PANEL_BOX;
-    box -> size = {size, size};
-    box -> background_color = bg;
-    box -> foreground_color = fg;
-    box -> has_background = true;
-
-    indicator -> type = PANEL_BOX;
-    indicator -> position = {size / 4, size / 4};
-    indicator -> size = {size / 2, size / 2};
-    indicator -> foreground_color = *out == sel ? bg : fg;
-    indicator -> has_background = false;
-
-    typedef struct Packet{
-        Color fg;
-        Color bg;
-        Panel* indicator;
-        T* out;
-        T sel;
-        T dsel;
-    } Packet;
-
-    Packet *p = new Packet{fg, bg, indicator, out, sel, dsel};
-
-    button -> p.position = {0, 0};
-    button -> p.size = {size, size};
-    button -> packet = p;
-    button -> click_func = [](void* v){
-        Packet* p = (Packet*)v;
-        *p -> out = *p -> out == p -> sel ? p -> dsel : p -> sel;
-        p -> indicator -> foreground_color = *(p -> out) == p -> sel ? p -> bg : p -> fg;
-    };
-
-    return (Panel*)button;
-}
-
-template <typename T>
-void ui_refresh_checkbox(Panel* checkbox){
-    Panel_Button* cb = (Panel_Button*)checkbox;
-    typedef struct Packet{
-        Color fg;
-        Color bg;
-        Panel* indicator;
-        T* out;
-        T sel;
-        T dsel;
-    } Packet;
-
-    Packet* p = (Packet*)cb -> packet;
-    p -> indicator -> foreground_color = *(p -> out) == p -> sel ? p -> bg : p -> fg;
-}
 
 /*---inline util functions---*/
 
@@ -549,11 +460,16 @@ inline uint clampui(uint a, uint min, uint max){
     return a;
 }
 
+inline int max(int a, int b){
+    if(a > b)
+        return a;
+    return b;
+}
+
 //Simple distance calculation
 inline double distancec2d(Coord2d a, Coord2d b){
     return sqrt( std::pow((b.x - a.x), 2) +  std::pow((b.y - a.y), 2));
 }
-
 
 inline std::string get_resource_path(const std::string& executable_path, std::string resource_name){
     std::replace(resource_name.begin(), resource_name.end(), '/', SEPARATOR);
@@ -561,6 +477,41 @@ inline std::string get_resource_path(const std::string& executable_path, std::st
     return executable_path.substr(0, substri) + SEPARATOR + resource_name;
 }
 
+template <typename T>
+T* entity_add_component(Entity* entity){
+    T* component = new T();
+    ((Component*)component) -> size = sizeof(T);
+
+    for(int i = 0; i < 256; ++i){
+        if(entity -> components[i] == nullptr) {
+            entity->components[i] = (Component*)component;
+
+            if(entity -> components[i]->on_create != nullptr)
+                entity->components[i]->on_create(entity, entity->components[i]);
+
+            return (T*)entity -> components[i];
+        }
+    }
+
+    //Failed to add component
+    delete component;
+    return nullptr;
+}
+
+template <typename T>
+T* entity_get_component(Entity* e){
+    Component* temp = (Component*)new T;
+
+    for(int i = 0; i < 256; ++i){
+        if(e -> components[i] != nullptr && e -> components[i]->type == temp -> type) {
+            delete temp;
+            return (T*)e->components[i];
+        }
+    }
+
+    delete temp;
+    return nullptr;
+}
 #include "components/collider.h"
 #include "components/renderer.h"
 #include "components/transform.h"

@@ -8,10 +8,10 @@
 typedef struct Transform{
     Component c;
     Camera  camera{8,8}; //All entities have a camera, because fuck you
-    Coord2d position;
-    Coord2d velocity;
-    uint move_state;
-    uint direction;
+    Coord2d position = {0,0};
+    Coord2d velocity = {0,0};
+    uint move_state = 0;
+    uint direction = 0;
     Map* map;
 
     Transform(){
@@ -48,6 +48,7 @@ typedef struct Transform{
                 transform->direction = DIRECTION_SOUTH;
             if (transform->velocity.y < 0)
                 transform->direction = DIRECTION_NORTH;
+
         };
     };
 } Transform;

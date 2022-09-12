@@ -9,8 +9,17 @@
 Entity* g_entity_registry[ENTITY_MAX];
 uint g_entity_highest_id = 0;
 
-Entity* entity_create(){
+Entity* entity_create(int id_override){
+    Entity* entity = new Entity();
+    entity -> transform = entity_add_component<Transform>(entity);
+    entity -> id = id_override;
+    g_entity_registry[id_override] = entity;
+    if(id_override > g_entity_highest_id)
+        g_entity_highest_id = id_override;
+    return entity;
+}
 
+Entity* entity_create(){
     Entity* entity = new Entity();
     entity -> transform = entity_add_component<Transform>(entity);
     for(int i = 0; i < ENTITY_MAX; ++i){
@@ -60,7 +69,6 @@ void entity_tick(){
         if(e == nullptr)
             continue;
 
-        //TODO: Readd this
         //Skip entities which are dead but not deleted yet
         if(e -> health <= 0)
             continue;
@@ -137,7 +145,6 @@ Coord2d entity_collision(Collider* col, Transform* transform, Coord2d delta){
     }
 
     //Check all entities
-    //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
         if(g_entity_registry[i] == nullptr)
@@ -193,7 +200,6 @@ Entity* entity_hit(Collider* col, Transform* transform){
                               {col->hit_bounds.p2.x + new_ent_pos.x, col->hit_bounds.p2.y + new_ent_pos.y} };
 
     //Check all entities
-    //TODO: better way?
 
     for(int i = 0; i <= g_entity_highest_id; ++i){
         if(g_entity_registry[i] == nullptr)

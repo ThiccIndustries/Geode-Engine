@@ -28,12 +28,12 @@ GLFWwindow* rendering_init_opengl(uint window_x, uint window_y, uint ws, uint rs
 
     int mon_count;
     GLFWmonitor** mons = glfwGetMonitors(&mon_count);
-    const GLFWvidmode* mode = glfwGetVideoMode(mons[1]);
+    const GLFWvidmode* mode = glfwGetVideoMode(mons[0]);
 
     double mon_aspect = (double)mode->height / (double)mode -> width;
 
-    int scale1 = mode->width / window_x;
-    int scale2 = mode->height / window_y;
+    int scale1 = (mode->width / window_x) - 1;
+    int scale2 = (mode->height / window_y) - 1;
 
     int scale = std::max(scale1, scale2);
 
@@ -180,7 +180,7 @@ void rendering_debug_draw_box(Coord2d p1, Coord2d p2, Color c){
     glColor1c(COLOR_WHITE);
 }
 
-void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewport_e){
+void rendering_draw_entity(Entity* entity, Entity* viewport_e){
     double tick_interp = g_time -> tick_delta / (1.0 / TIME_TPS) * (g_time -> paused ? 0 : 1);
 
     double viewport_x = (viewport_e -> transform -> position.x + (viewport_e -> transform -> camera.position.x));
@@ -214,30 +214,39 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
 
     //Get texture for current state
     auto eren = entity_get_component<Renderer>(entity);
+    uint direction = entity->transform->direction;
     uint index = eren -> atlas_index;
     bool inv_x = false;
+    bool inv_y = false;
 
-    if(eren -> spritesheet_size.x == 3) {
-        switch (entity->transform->direction) {
-            case DIRECTION_NORTH:
+    switch(eren -> sheet_type){
+        case SHEET_SINGLE:
+            break;
+
+        case SHEET_VH:
+            if(direction == DIRECTION_EAST || direction == DIRECTION_WEST)
                 index += 1;
-                inv_x = false;
-                break;
-            case DIRECTION_EAST:
-                index += 2;
+            if(direction == DIRECTION_EAST)
                 inv_x = true;
-                break;
-            case DIRECTION_SOUTH:
-                index += 0;
-                inv_x = false;
-                break;
-            case DIRECTION_WEST:
+            if(direction == DIRECTION_NORTH)
+                inv_y = true;
+
+            break;
+        case SHEET_UDH:
+            if(direction == DIRECTION_NORTH)
+                index += 1;
+            if(direction == DIRECTION_EAST || direction == DIRECTION_WEST)
                 index += 2;
-                inv_x = false;
-                break;
-        }
+            if(direction == DIRECTION_EAST)
+                inv_x = true;
+            break;
+
+        case SHEET_UDLR:
+            index += direction;
+            break;
     }
 
+    Texture* atlas_texture = eren -> atlas_texture;
 
     switch(entity -> transform -> move_state){
         case ENT_STATE_MOVING:
@@ -258,10 +267,10 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     glEnable(GL_BLEND);
 
     glBegin(GL_QUADS);{
-        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y);                                 glVertex2d((entity_x * scl),                 (entity_y * scl));
-        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * !inv_x),    texture_uv_y);                                 glVertex2d((entity_x * scl) + (16 * scl),    (entity_y * scl));
-        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * !inv_x),    texture_uv_y + atlas_texture -> atlas_uvs.y);  glVertex2d((entity_x * scl) + (16 * scl),    (entity_y * scl) + (16 * scl));
-        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y + atlas_texture -> atlas_uvs.y);  glVertex2d((entity_x * scl),                 (entity_y * scl) + (16 * scl));
+        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y + (atlas_texture -> atlas_uvs.y * inv_y));                                 glVertex2d((entity_x * scl),                 (entity_y * scl));
+        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * !inv_x),    texture_uv_y + (atlas_texture -> atlas_uvs.y * inv_y));                                 glVertex2d((entity_x * scl) + (16 * scl),    (entity_y * scl));
+        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * !inv_x),    texture_uv_y + (atlas_texture -> atlas_uvs.y * !inv_y));  glVertex2d((entity_x * scl) + (16 * scl),    (entity_y * scl) + (16 * scl));
+        glTexCoord2d(texture_uv_x + (atlas_texture -> atlas_uvs.x * inv_x),     texture_uv_y + (atlas_texture -> atlas_uvs.y * !inv_y));  glVertex2d((entity_x * scl),                 (entity_y * scl) + (16 * scl));
     }
     glEnd();
     glDisable(GL_TEXTURE_2D);
@@ -291,12 +300,12 @@ void rendering_draw_entity(Entity* entity, Texture* atlas_texture, Entity* viewp
     }
 }
 
-void rendering_draw_entities(Texture* atlas_texture, Entity* viewport_e){
+void rendering_draw_entities(Entity* viewport_e){
     for(int i = g_entity_highest_id; i >= 0; i--){
         if(g_entity_registry[i] == nullptr || entity_get_component<Renderer>(g_entity_registry[i]) == nullptr)
             continue;
 
-        rendering_draw_entity(g_entity_registry[i], atlas_texture, viewport_e);
+        rendering_draw_entity(g_entity_registry[i], viewport_e);
     }
 }
 
@@ -386,9 +395,20 @@ void rendering_draw_cursor(Texture* ui_texture, uint atlas_index){
 
 void rendering_draw_dialog(const std::string& title, const std::string& message, Font* font){
     //How many pixels to offset message by to center it
-    int offset = ((g_video_mode.window_resolution.x / 2) - (message.length() * font -> t -> tile_size) / 2);
-    int title_offset = ((message.length() - title.length()) / 2) * font -> t -> tile_size;
-    int size_x = ((message.length()) * font -> t -> tile_size) + 4;
+    int offset = ((g_video_mode.window_resolution.x / 2) - (title.length() * font -> t -> tile_size) / 2);
+    int title_offset = ((double)(message.length() - title.length()) / 2.0) * font -> t -> tile_size;
+    int message_offset = 0;
+    int size_x_title = ((title.length()) * font -> t -> tile_size) + 4;
+    int size_x_message = ((message.length()) * font -> t -> tile_size) + 4;
+
+
+    if(size_x_title > size_x_message){
+        offset = ((g_video_mode.window_resolution.x / 2) - (title.length() * font -> t -> tile_size) / 2);
+        title_offset = 0;
+        message_offset = ((double)(title.length() - message.length()) / 2.0) * font -> t -> tile_size;
+    }
+
+    int size_x = max(size_x_title, size_x_message);
     int size_y = (4 * font -> t -> tile_size);
 
     Panel_Text* error_title = new Panel_Text();
@@ -401,7 +421,7 @@ void rendering_draw_dialog(const std::string& title, const std::string& message,
     Panel_Text* error_message = new Panel_Text();
     error_message -> p.has_background = false;
     error_message -> p.foreground_color = {255, 255, 255};
-    error_message -> p.position = {2, (int)font -> t -> tile_size * 2};
+    error_message -> p.position = {2 + message_offset, (int)font -> t -> tile_size * 2};
     error_message -> text = message;
     error_message -> font = font;
 
