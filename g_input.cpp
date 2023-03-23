@@ -10,10 +10,10 @@ bool i_k_keys[GLFW_KEY_LAST + 1];
 bool i_m_keys[GLFW_MOUSE_BUTTON_LAST + 1];
 
 int i_k_actions[GLFW_KEY_LAST + 1];
-int i_m_actions[GLFW_KEY_LAST + 1];
+int i_m_actions[GLFW_MOUSE_BUTTON_LAST + 1];
 
 int i_k_tick_actions[GLFW_KEY_LAST + 1];
-int i_m_tick_actions[GLFW_KEY_LAST + 1];
+int i_m_tick_actions[GLFW_MOUSE_BUTTON_LAST + 1];
 
 Coord2d i_m_pos{0, 0};
 Coord2d i_m_scroll{0, 0};
