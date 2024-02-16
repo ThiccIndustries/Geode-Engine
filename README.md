@@ -1,5 +1,2 @@
 # Thicc Industries' Geode Engine
-
-**Geode Engine is not yet feature complete, and is not ready for production games.**
-
-Geode Engine is a lightweight, OpenGL game library written using procedural C++.
+*** This project is abandoned in favor of a better, modern opengl system written in C instead of evil C (procedural C++) ***
